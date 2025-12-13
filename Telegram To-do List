@@ -1,44 +1,44 @@
 blueprint:
-  name: Telegram To-do List
+  name: Telegram To-do List (Reply cmds split, EN)
   description: >
-    Управление списком покупок (To-do) через Telegram.
-    - Inline-кнопки для отметки и переключения.
-    - Reply-клавиатура с отдельными командами:
-      📜 Показать список, 🛒 Только активные, 📜 Показать все, 🗑 Очистить завершенные, 🔥 Очистить всё.
-    - Команды из Reply-клавиатуры не добавляются в список и удаляются из чата.
-    - Для HA 2025.11+
+    Manage a Home Assistant to‑do list via Telegram.
+    - Inline buttons to mark items done and switch views.
+    - Reply keyboard with separate commands:
+      📜 Show list, 🛒 Active only, 📜 Show all, 🗑 Clear completed, 🔥 Clear all.
+    - Reply‑keyboard commands are not added as items and are deleted from the chat.
+    - Requires HA 2025.11+.
   domain: automation
   input:
     todo_entity:
-      name: To-do список
-      description: Какой To-do list использовать
+      name: To‑do list
+      description: Which to‑do list entity to use
       selector:
         entity:
           domain: todo
 
     telegram_chat_id:
       name: Telegram chat_id
-      description: ID чата (число), куда слать сообщения.
+      description: Chat ID (number) where the bot should send messages.
       selector:
         text: {}
 
     list_command:
-      name: Команда для списка
-      description: Telegram-команда, открывающая список
+      name: List command
+      description: Telegram command that opens the list (same as "🛒 Active only")
       default: "/list"
       selector:
         text: {}
 
     bot_config_entry_id:
-      name: Config Entry ID бота
+      name: Bot Config Entry ID
       description: >
-        Уникальный ID настройки бота (например: 01KC736CV60QW39DX3A4FHNW0K).
+        Unique Config Entry ID of the Telegram bot (for example: 01KC736CV60QW39DX3A4FHNW0K).
       selector:
         text: {}
 
     last_message_id_helper:
-      name: Helper для хранения message_id
-      description: input_text или input_number для хранения ID последнего сообщения
+      name: Helper to store message_id
+      description: input_text or input_number that stores the last inline message_id
       selector:
         entity:
           domain:
@@ -68,7 +68,7 @@ condition: []
 action:
   - choose:
       # ----------------------------------------------------------------
-      # 1. Команда /list (то же, что "🛒 Только активные")
+      # 1. /list command (same as "🛒 Active only")
       # ----------------------------------------------------------------
       - conditions:
           - condition: template
@@ -87,9 +87,9 @@ action:
               items: "{{ todo_resp[todo_entity]['items'] | default([]) }}"
               header_text: >
                 {% if items | length == 0 %}
-                  Список пуст 🤷‍♂️
+                  List is empty 🤷‍♂️
                 {% else %}
-                  Ваш список покупок:
+                  Your shopping list:
                 {% endif %}
               list_keyboard: >
                 {% set ns = namespace(rows=[]) %}
@@ -97,8 +97,8 @@ action:
                   {% set btn = '✅ ' ~ item.summary ~ ':/done_' ~ item.uid %}
                   {% set ns.rows = ns.rows + [btn] %}
                 {% endfor %}
-                {% set ns.rows = ns.rows + ['📜 Показать все:/toggle_mode_all'] %}
-                {% set ns.rows = ns.rows + ['🗑 Очистить завершенные:/clear_completed'] %}
+                {% set ns.rows = ns.rows + ['📜 Show all:/toggle_mode_all'] %}
+                {% set ns.rows = ns.rows + ['🗑 Clear completed:/clear_completed'] %}
                 {{ ns.rows }}
 
           - action: telegram_bot.send_message
@@ -130,7 +130,7 @@ action:
                   value: "{{ last_msg_id | int(0) }}"
 
       # ----------------------------------------------------------------
-      # 2. Текст -> Добавить (НЕ команды)
+      # 2. Free text -> Add items (NOT commands)
       # ----------------------------------------------------------------
       - conditions:
           - condition: template
@@ -139,11 +139,11 @@ action:
               {{ trigger.event.event_type == 'telegram_text'
                  and not t.startswith('/')
                  and t not in [
-                   '📜 Показать список',
-                   '🛒 Только активные',
-                   '📜 Показать все',
-                   '🗑 Очистить завершенные',
-                   '🔥 Очистить всё'
+                   '📜 Show list',
+                   '🛒 Active only',
+                   '📜 Show all',
+                   '🗑 Clear completed',
+                   '🔥 Clear all'
                  ] }}
         sequence:
           - action: todo.get_items
@@ -189,9 +189,9 @@ action:
               items_new: "{{ todo_resp_new[todo_entity]['items'] | default([]) }}"
               header_text_new: >
                 {% if items_new | length == 0 %}
-                  Список пуст 🤷‍♂️
+                  List is empty 🤷‍♂️
                 {% else %}
-                  Ваш список покупок:
+                  Your shopping list:
                 {% endif %}
               list_keyboard_new: >
                 {% set ns = namespace(rows=[]) %}
@@ -199,8 +199,8 @@ action:
                   {% set btn = '✅ ' ~ item.summary ~ ':/done_' ~ item.uid %}
                   {% set ns.rows = ns.rows + [btn] %}
                 {% endfor %}
-                {% set ns.rows = ns.rows + ['📜 Показать все:/toggle_mode_all'] %}
-                {% set ns.rows = ns.rows + ['🗑 Очистить завершенные:/clear_completed'] %}
+                {% set ns.rows = ns.rows + ['📜 Show all:/toggle_mode_all'] %}
+                {% set ns.rows = ns.rows + ['🗑 Clear completed:/clear_completed'] %}
                 {{ ns.rows }}
               last_msg_id_val: >
                 {% if last_message_id_helper.startswith('input_text.') %}
@@ -251,18 +251,18 @@ action:
                       value: "{{ new_id | int(0) }}"
 
       # ----------------------------------------------------------------
-      # 3. Команды из Reply-клавиатуры (удаляем сообщение + действие)
+      # 3. Reply‑keyboard commands (delete message + perform action)
       # ----------------------------------------------------------------
       - conditions:
           - condition: template
             value_template: >
               {{ trigger.event.event_type == 'telegram_text'
                  and (trigger.event.data.text | default('') | trim) in [
-                   '📜 Показать список',
-                   '🛒 Только активные',
-                   '📜 Показать все',
-                   '🗑 Очистить завершенные',
-                   '🔥 Очистить всё'
+                   '📜 Show list',
+                   '🛒 Active only',
+                   '📜 Show all',
+                   '🗑 Clear completed',
+                   '🔥 Clear all'
                  ] }}
         sequence:
           - variables:
@@ -290,10 +290,10 @@ action:
                       message_id: "{{ msg_id }}"
 
           - choose:
-              # 📜 Показать список — просто триггерит /list-логику (активные)
+              # 📜 Show list / 🛒 Active only — show active items
               - conditions:
                   - condition: template
-                    value_template: "{{ text == '📜 Показать список' or text == '🛒 Только активные' }}"
+                    value_template: "{{ text == '📜 Show list' or text == '🛒 Active only' }}"
                 sequence:
                   - action: todo.get_items
                     target:
@@ -306,9 +306,9 @@ action:
                       items_cmd: "{{ todo_resp_cmd[todo_entity]['items'] | default([]) }}"
                       header_cmd: >
                         {% if items_cmd | length == 0 %}
-                          Список пуст 🤷‍♂️
+                          List is empty 🤷‍♂️
                         {% else %}
-                          Ваш список покупок:
+                          Your shopping list:
                         {% endif %}
                       kb_cmd: >
                         {% set ns = namespace(rows=[]) %}
@@ -316,8 +316,8 @@ action:
                           {% set btn = '✅ ' ~ item.summary ~ ':/done_' ~ item.uid %}
                           {% set ns.rows = ns.rows + [btn] %}
                         {% endfor %}
-                        {% set ns.rows = ns.rows + ['📜 Показать все:/toggle_mode_all'] %}
-                        {% set ns.rows = ns.rows + ['🗑 Очистить завершенные:/clear_completed'] %}
+                        {% set ns.rows = ns.rows + ['📜 Show all:/toggle_mode_all'] %}
+                        {% set ns.rows = ns.rows + ['🗑 Clear completed:/clear_completed'] %}
                         {{ ns.rows }}
 
                   - action: telegram_bot.send_message
@@ -347,10 +347,10 @@ action:
                         data:
                           value: "{{ last_msg_id2 | int(0) }}"
 
-              # 📜 Показать все — показать все элементы
+              # 📜 Show all — show all items
               - conditions:
                   - condition: template
-                    value_template: "{{ text == '📜 Показать все' }}"
+                    value_template: "{{ text == '📜 Show all' }}"
                 sequence:
                   - action: todo.get_items
                     target:
@@ -360,9 +360,9 @@ action:
                       items_all: "{{ todo_resp_all_cmd[todo_entity]['items'] | default([]) }}"
                       header_all: >
                         {% if items_all | length == 0 %}
-                          Список пуст 🤷‍♂️
+                          List is empty 🤷‍♂️
                         {% else %}
-                          История (все):
+                          History (all items):
                         {% endif %}
                       kb_all: >
                         {% set ns = namespace(rows=[]) %}
@@ -374,7 +374,7 @@ action:
                           {% endif %}
                           {% set ns.rows = ns.rows + [btn] %}
                         {% endfor %}
-                        {% set ns.rows = ns.rows + ['🗑 Очистить завершенные:/clear_completed'] %}
+                        {% set ns.rows = ns.rows + ['🗑 Clear completed:/clear_completed'] %}
                         {{ ns.rows }}
 
                   - action: telegram_bot.send_message
@@ -384,10 +384,10 @@ action:
                       message: "{{ header_all }}"
                       inline_keyboard: "{{ kb_all }}"
 
-              # 🗑 Очистить завершенные
+              # 🗑 Clear completed
               - conditions:
                   - condition: template
-                    value_template: "{{ text == '🗑 Очистить завершенные' }}"
+                    value_template: "{{ text == '🗑 Clear completed' }}"
                 sequence:
                   - action: todo.remove_completed_items
                     target:
@@ -396,12 +396,12 @@ action:
                     data:
                       config_entry_id: "{{ bot_config_id }}"
                       target: "{{ telegram_chat_id }}"
-                      message: "✅ Завершенные пункты удалены."
+                      message: "✅ Completed items cleared."
 
-              # 🔥 Очистить всё
+              # 🔥 Clear all
               - conditions:
                   - condition: template
-                    value_template: "{{ text == '🔥 Очистить всё' }}"
+                    value_template: "{{ text == '🔥 Clear all' }}"
                 sequence:
                   - action: todo.get_items
                     target:
@@ -419,10 +419,10 @@ action:
                     data:
                       config_entry_id: "{{ bot_config_id }}"
                       target: "{{ telegram_chat_id }}"
-                      message: "🔥 Весь список очищен."
+                      message: "🔥 Entire list cleared."
 
       # ----------------------------------------------------------------
-      # 4. Callback (inline-кнопки)
+      # 4. Callback (inline buttons)
       # ----------------------------------------------------------------
       - conditions:
           - condition: template
@@ -480,9 +480,9 @@ action:
                 {% endif %}
               header_text_cb: >
                 {% if items | length == 0 %}
-                  Список пуст 🤷‍♂️
+                  List is empty 🤷‍♂️
                 {% else %}
-                  {% if show_mode == 'active' %}Ваш список покупок:{% else %}История (все):{% endif %}
+                  {% if show_mode == 'active' %}Your shopping list:{% else %}History (all items):{% endif %}
                 {% endif %}
               keyboard_cb: >
                 {% set ns = namespace(rows=[]) %}
@@ -497,12 +497,12 @@ action:
                 {% endfor %}
                 {% set toggle_str = '' %}
                 {% if show_mode == 'active' %}
-                  {% set toggle_str = '📜 Показать все:/toggle_mode_all' %}
+                  {% set toggle_str = '📜 Show all:/toggle_mode_all' %}
                 {% else %}
-                  {% set toggle_str = '🛒 Только активные:/toggle_mode_active' %}
+                  {% set toggle_str = '🛒 Active only:/toggle_mode_active' %}
                 {% endif %}
                 {% set ns.rows = ns.rows + [toggle_str] %}
-                {% set ns.rows = ns.rows + ['🗑 Очистить завершенные:/clear_completed'] %}
+                {% set ns.rows = ns.rows + ['🗑 Clear completed:/clear_completed'] %}
                 {{ ns.rows }}
 
           - action: telegram_bot.edit_message
@@ -518,4 +518,4 @@ action:
               config_entry_id: "{{ bot_config_id }}"
               callback_query_id: "{{ trigger.event.data.id }}"
               message: >
-                {% if is_done %}Выполнено{% elif is_clear %}Список очищен{% else %}Обновлено{% endif %}
+                {% if is_done %}Done{% elif is_clear %}Cleared{% else %}Updated{% endif %}
