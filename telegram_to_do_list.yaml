@@ -1,5 +1,5 @@
 blueprint:
-  name: Telegram To-do List (Reply cmds split, EN)
+  name: Telegram To-do List (EN)
   description: >
     Manage a Home Assistant to‑do list via Telegram.
     - Inline buttons to mark items done and switch views.
