@@ -120,8 +120,8 @@ Blueprint ожидает **русский текст внутри логики**
 ```yaml
 action: telegram_bot.send_message
 data:
-  config_entry_id: 01KC736CV60QW39DX3A4FHNW0K
-  target: 186757704
+  config_entry_id: ВАШ_CONFIG_ENTRY_ID
+  target: ВАШ_CHAT_ID
   keyboard:
     - "📜 Показать список"
     - "🛒 Только активные"
