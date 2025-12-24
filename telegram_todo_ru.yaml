@@ -63,7 +63,10 @@ trigger:
   - platform: event
     event_type: telegram_text
 
-condition: []
+condition:
+  - condition: template
+    value_template: >
+      {{ trigger.event.data.bot.config_entry_id == bot_config_id }}
 
 action:
   - choose:
