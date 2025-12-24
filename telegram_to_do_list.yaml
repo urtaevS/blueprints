@@ -370,7 +370,7 @@ action:
                           {% if item.status == 'needs_action' %}
                             {% set btn = '✅ ' ~ item.summary ~ ':/done_' ~ item.uid %}
                           {% else %}
-                            {% set btn = '☑️ ' ~ item.summary ~ ':/noop' %}
+                            {% set btn = '☑️ ' ~ item.summary ~ ':/reopen_' ~ item.uid %}
                           {% endif %}
                           {% set ns.rows = ns.rows + [btn] %}
                         {% endfor %}
@@ -432,6 +432,7 @@ action:
           - variables:
               data: "{{ trigger.event.data.data | default('') }}"
               is_done: "{{ data.startswith('/done_') }}"
+              is_reopen: "{{ data.startswith('/reopen_') }}"
               is_clear: "{{ data == '/clear_completed' }}"
               is_toggle_active: "{{ data == '/toggle_mode_active' }}"
               is_toggle_all: "{{ data == '/toggle_mode_all' }}"
@@ -465,6 +466,19 @@ action:
                   item: "{{ uid }}"
                   status: "completed"
 
+          - if:
+              - condition: template
+                value_template: "{{ is_reopen }}"
+            then:
+              - variables:
+                  uid: "{{ data.split('_', 1)[1] }}"
+              - action: todo.update_item
+                target:
+                  entity_id: "{{ todo_entity }}"
+                data:
+                  item: "{{ uid }}"
+                  status: "needs_action"
+
           - action: todo.get_items
             target:
               entity_id: "{{ todo_entity }}"
@@ -491,7 +505,7 @@ action:
                     {% set btn = '✅ ' ~ item.summary ~ ':/done_' ~ item.uid %}
                     {% set ns.rows = ns.rows + [btn] %}
                   {% else %}
-                    {% set btn = '☑️ ' ~ item.summary ~ ':/noop' %}
+                    {% set btn = '☑️ ' ~ item.summary ~ ':/reopen_' ~ item.uid %}
                     {% set ns.rows = ns.rows + [btn] %}
                   {% endif %}
                 {% endfor %}
@@ -518,4 +532,4 @@ action:
               config_entry_id: "{{ bot_config_id }}"
               callback_query_id: "{{ trigger.event.data.id }}"
               message: >
-                {% if is_done %}Done{% elif is_clear %}Cleared{% else %}Updated{% endif %}
+                {% if is_done %}Done{% elif is_reopen %}Active again{% elif is_clear %}Cleared{% else %}Updated{% endif %}
