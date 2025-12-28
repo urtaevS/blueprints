@@ -32,7 +32,7 @@ blueprint:
     bot_config_entry_id:
       name: Bot Config Entry ID
       description: >
-        Unique Config Entry ID of the Telegram bot (for example: 01KC736CV60QW39DX3A4FHNW0K).
+        Unique Config Entry ID of the Telegram bot.
       selector:
         text: {}
 
