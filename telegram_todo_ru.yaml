@@ -32,7 +32,7 @@ blueprint:
     bot_config_entry_id:
       name: Config Entry ID бота
       description: >
-        Уникальный ID настройки бота (например: 01KC736CV60QW39DX3A4FHNW0K).
+        Уникальный ID настройки бота.
       selector:
         text: {}
 
