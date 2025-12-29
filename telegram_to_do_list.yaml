@@ -1,5 +1,5 @@
 blueprint:
-  name: Telegram To-do List (Reply cmds split, EN)
+  name: Telegram To-do List
   description: >
     Manage a Home Assistant to‑do list via Telegram.
     - Inline buttons to mark items done and switch views.
@@ -33,7 +33,7 @@ blueprint:
     bot_config_entry_id:
       name: Bot Config Entry ID
       description: >
-        Unique Config Entry ID of the Telegram bot (for example: 01KC736CV60QW39DX3A4FHNW0K).
+        Unique Config Entry ID of the Telegram bot.
       selector:
         text: {}
 
