@@ -18,9 +18,10 @@ blueprint:
 
     telegram_chat_id:
       name: Telegram chat_id
-      description: ID чата (число), куда слать сообщения.
+      description: ID чата (число или несколько через запятую), куда слать сообщения.
       selector:
-        text: {}
+        text:
+          multiple: true
 
     list_command:
       name: Команда для списка
@@ -32,7 +33,7 @@ blueprint:
     bot_config_entry_id:
       name: Config Entry ID бота
       description: >
-        Уникальный ID настройки бота.
+        Уникальный ID настройки бота (например: 01KC736CV60QW39DX3A4FHNW0K).
       selector:
         text: {}
 
@@ -50,7 +51,7 @@ max_exceeded: silent
 
 variables:
   todo_entity: !input todo_entity
-  telegram_chat_id: !input telegram_chat_id
+  telegram_chat_ids: !input telegram_chat_id
   list_command: !input list_command
   bot_config_id: !input bot_config_entry_id
   last_message_id_helper: !input last_message_id_helper
@@ -66,7 +67,8 @@ trigger:
 condition:
   - condition: template
     value_template: >
-      {{ trigger.event.data.bot.config_entry_id == bot_config_id }}
+      {{ trigger.event.data.bot.config_entry_id == bot_config_id 
+         and trigger.event.data.chat_id | string in telegram_chat_ids }}
 
 action:
   - choose:
@@ -107,7 +109,7 @@ action:
           - action: telegram_bot.send_message
             data:
               config_entry_id: "{{ bot_config_id }}"
-              target: "{{ telegram_chat_id }}"
+              target: "{{ trigger.event.data.chat_id }}"
               message: "{{ header_text }}"
               inline_keyboard: "{{ list_keyboard }}"
             response_variable: send_resp
@@ -221,7 +223,7 @@ action:
                   - action: telegram_bot.edit_message
                     data:
                       config_entry_id: "{{ bot_config_id }}"
-                      chat_id: "{{ telegram_chat_id }}"
+                      chat_id: "{{ trigger.event.data.chat_id }}"
                       message_id: "{{ last_msg_id_val | int }}"
                       message: "{{ header_text_new }}"
                       inline_keyboard: "{{ list_keyboard_new }}"
@@ -229,7 +231,7 @@ action:
               - action: telegram_bot.send_message
                 data:
                   config_entry_id: "{{ bot_config_id }}"
-                  target: "{{ telegram_chat_id }}"
+                  target: "{{ trigger.event.data.chat_id }}"
                   message: "{{ header_text_new }}"
                   inline_keyboard: "{{ list_keyboard_new }}"
                 response_variable: send_resp_new
@@ -326,7 +328,7 @@ action:
                   - action: telegram_bot.send_message
                     data:
                       config_entry_id: "{{ bot_config_id }}"
-                      target: "{{ telegram_chat_id }}"
+                      target: "{{ trigger.event.data.chat_id }}"
                       message: "{{ header_cmd }}"
                       inline_keyboard: "{{ kb_cmd }}"
                     response_variable: send_resp_cmd
@@ -383,7 +385,7 @@ action:
                   - action: telegram_bot.send_message
                     data:
                       config_entry_id: "{{ bot_config_id }}"
-                      target: "{{ telegram_chat_id }}"
+                      target: "{{ trigger.event.data.chat_id }}"
                       message: "{{ header_all }}"
                       inline_keyboard: "{{ kb_all }}"
 
@@ -398,7 +400,7 @@ action:
                   - action: telegram_bot.send_message
                     data:
                       config_entry_id: "{{ bot_config_id }}"
-                      target: "{{ telegram_chat_id }}"
+                      target: "{{ trigger.event.data.chat_id }}"
                       message: "✅ Завершенные пункты удалены."
 
               # 🔥 Очистить всё
@@ -421,7 +423,7 @@ action:
                   - action: telegram_bot.send_message
                     data:
                       config_entry_id: "{{ bot_config_id }}"
-                      target: "{{ telegram_chat_id }}"
+                      target: "{{ trigger.event.data.chat_id }}"
                       message: "🔥 Весь список очищен."
 
       # ----------------------------------------------------------------
