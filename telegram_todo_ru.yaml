@@ -48,6 +48,7 @@ blueprint:
 
 mode: restart
 max_exceeded: silent
+timeout: '00:01:30'  # 90 секунд вместо 30
 
 variables:
   todo_entity: !input todo_entity
