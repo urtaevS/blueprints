@@ -46,8 +46,8 @@ blueprint:
             - input_text
             - input_number
 
-mode: restart
-max_exceeded: silent
+mode: queued
+max: 5
 
 variables:
   todo_entity: !input todo_entity
@@ -71,6 +71,29 @@ condition:
          and (trigger.event.data.chat_id | string) in telegram_chat_ids }}
 
 action:
+  # ----------------------------------------------------------------
+  # 0. Command /kb — initialize reply keyboard
+  # ----------------------------------------------------------------
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ trigger.event.event_type == 'telegram_command'
+                 and trigger.event.data.command == '/kb' }}
+        sequence:
+          - action: telegram_bot.send_message
+            continue_on_error: true
+            data:
+              config_entry_id: "{{ bot_config_id }}"
+              target: "{{ trigger.event.data.chat_id }}"
+              keyboard:
+                - '📜 Show list'
+                - '🛒 Active only'
+                - '📜 Show all'
+                - '🗑 Clear completed'
+                - '🔥 Clear all'
+              message: "Keyboard activated ✅"
+
   - choose:
       # ----------------------------------------------------------------
       # 1. /list command (same as "🛒 Active only")
@@ -107,6 +130,7 @@ action:
                 {{ ns.rows }}
 
           - action: telegram_bot.send_message
+            continue_on_error: true
             data:
               config_entry_id: "{{ bot_config_id }}"
               target: "{{ trigger.event.data.chat_id }}"
@@ -221,6 +245,7 @@ action:
                       {{ last_msg_id_val not in ['', '0', 'unknown', 'unavailable', None] }}
                 sequence:
                   - action: telegram_bot.edit_message
+                    continue_on_error: true
                     data:
                       config_entry_id: "{{ bot_config_id }}"
                       chat_id: "{{ trigger.event.data.chat_id }}"
@@ -229,6 +254,7 @@ action:
                       inline_keyboard: "{{ list_keyboard_new }}"
             default:
               - action: telegram_bot.send_message
+                continue_on_error: true
                 data:
                   config_entry_id: "{{ bot_config_id }}"
                   target: "{{ trigger.event.data.chat_id }}"
@@ -290,6 +316,7 @@ action:
                     value_template: "{{ msg_id > 0 }}"
                 sequence:
                   - action: telegram_bot.delete_message
+                    continue_on_error: true
                     data:
                       chat_id: "{{ chat_id }}"
                       message_id: "{{ msg_id }}"
@@ -326,6 +353,7 @@ action:
                         {{ ns.rows }}
 
                   - action: telegram_bot.send_message
+                    continue_on_error: true
                     data:
                       config_entry_id: "{{ bot_config_id }}"
                       target: "{{ trigger.event.data.chat_id }}"
@@ -383,6 +411,7 @@ action:
                         {{ ns.rows }}
 
                   - action: telegram_bot.send_message
+                    continue_on_error: true
                     data:
                       config_entry_id: "{{ bot_config_id }}"
                       target: "{{ trigger.event.data.chat_id }}"
@@ -398,6 +427,7 @@ action:
                     target:
                       entity_id: "{{ todo_entity }}"
                   - action: telegram_bot.send_message
+                    continue_on_error: true
                     data:
                       config_entry_id: "{{ bot_config_id }}"
                       target: "{{ trigger.event.data.chat_id }}"
@@ -421,6 +451,7 @@ action:
                           data:
                             item: "{{ repeat.item.uid }}"
                   - action: telegram_bot.send_message
+                    continue_on_error: true
                     data:
                       config_entry_id: "{{ bot_config_id }}"
                       target: "{{ trigger.event.data.chat_id }}"
@@ -525,6 +556,7 @@ action:
                 {{ ns.rows }}
 
           - action: telegram_bot.edit_message
+            continue_on_error: true
             data:
               config_entry_id: "{{ bot_config_id }}"
               chat_id: "{{ chat_id }}"
@@ -533,6 +565,7 @@ action:
               inline_keyboard: "{{ keyboard_cb }}"
 
           - action: telegram_bot.answer_callback_query
+            continue_on_error: true
             data:
               config_entry_id: "{{ bot_config_id }}"
               callback_query_id: "{{ trigger.event.data.id }}"
