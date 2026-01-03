@@ -1,5 +1,5 @@
 blueprint:
-  name: Telegram To-do List
+  name: Telegram To-do List (EN)
   description: >
     Manage a Home Assistant to‑do list via Telegram.
     - Inline buttons to mark items done and switch views.
@@ -18,10 +18,9 @@ blueprint:
 
     telegram_chat_id:
       name: Telegram chat_id
-      description: Chat ID(s) (number or several, comma‑separated) where the bot should send messages.
+      description: Chat ID (number) where the bot should send messages.
       selector:
-        text:
-          multiple: true
+        text: {}
 
     list_command:
       name: List command
@@ -46,12 +45,12 @@ blueprint:
             - input_text
             - input_number
 
-mode: queued
-max: 5
+mode: restart
+max_exceeded: silent
 
 variables:
   todo_entity: !input todo_entity
-  telegram_chat_ids: !input telegram_chat_id
+  telegram_chat_id: !input telegram_chat_id
   list_command: !input list_command
   bot_config_id: !input bot_config_entry_id
   last_message_id_helper: !input last_message_id_helper
@@ -67,33 +66,9 @@ trigger:
 condition:
   - condition: template
     value_template: >
-      {{ trigger.event.data.bot.config_entry_id == bot_config_id
-         and (trigger.event.data.chat_id | string) in telegram_chat_ids }}
+      {{ trigger.event.data.bot.config_entry_id == bot_config_id }}
 
 action:
-  # ----------------------------------------------------------------
-  # 0. Command /kb — initialize reply keyboard
-  # ----------------------------------------------------------------
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: >
-              {{ trigger.event.event_type == 'telegram_command'
-                 and trigger.event.data.command == '/kb' }}
-        sequence:
-          - action: telegram_bot.send_message
-            continue_on_error: true
-            data:
-              config_entry_id: "{{ bot_config_id }}"
-              target: "{{ trigger.event.data.chat_id }}"
-              keyboard:
-                - '📜 Show list'
-                - '🛒 Active only'
-                - '📜 Show all'
-                - '🗑 Clear completed'
-                - '🔥 Clear all'
-              message: "Keyboard activated ✅"
-
   - choose:
       # ----------------------------------------------------------------
       # 1. /list command (same as "🛒 Active only")
@@ -130,10 +105,9 @@ action:
                 {{ ns.rows }}
 
           - action: telegram_bot.send_message
-            continue_on_error: true
             data:
               config_entry_id: "{{ bot_config_id }}"
-              target: "{{ trigger.event.data.chat_id }}"
+              target: "{{ telegram_chat_id }}"
               message: "{{ header_text }}"
               inline_keyboard: "{{ list_keyboard }}"
             response_variable: send_resp
@@ -245,19 +219,17 @@ action:
                       {{ last_msg_id_val not in ['', '0', 'unknown', 'unavailable', None] }}
                 sequence:
                   - action: telegram_bot.edit_message
-                    continue_on_error: true
                     data:
                       config_entry_id: "{{ bot_config_id }}"
-                      chat_id: "{{ trigger.event.data.chat_id }}"
+                      chat_id: "{{ telegram_chat_id }}"
                       message_id: "{{ last_msg_id_val | int }}"
                       message: "{{ header_text_new }}"
                       inline_keyboard: "{{ list_keyboard_new }}"
             default:
               - action: telegram_bot.send_message
-                continue_on_error: true
                 data:
                   config_entry_id: "{{ bot_config_id }}"
-                  target: "{{ trigger.event.data.chat_id }}"
+                  target: "{{ telegram_chat_id }}"
                   message: "{{ header_text_new }}"
                   inline_keyboard: "{{ list_keyboard_new }}"
                 response_variable: send_resp_new
@@ -316,7 +288,6 @@ action:
                     value_template: "{{ msg_id > 0 }}"
                 sequence:
                   - action: telegram_bot.delete_message
-                    continue_on_error: true
                     data:
                       chat_id: "{{ chat_id }}"
                       message_id: "{{ msg_id }}"
@@ -353,10 +324,9 @@ action:
                         {{ ns.rows }}
 
                   - action: telegram_bot.send_message
-                    continue_on_error: true
                     data:
                       config_entry_id: "{{ bot_config_id }}"
-                      target: "{{ trigger.event.data.chat_id }}"
+                      target: "{{ telegram_chat_id }}"
                       message: "{{ header_cmd }}"
                       inline_keyboard: "{{ kb_cmd }}"
                     response_variable: send_resp_cmd
@@ -411,10 +381,9 @@ action:
                         {{ ns.rows }}
 
                   - action: telegram_bot.send_message
-                    continue_on_error: true
                     data:
                       config_entry_id: "{{ bot_config_id }}"
-                      target: "{{ trigger.event.data.chat_id }}"
+                      target: "{{ telegram_chat_id }}"
                       message: "{{ header_all }}"
                       inline_keyboard: "{{ kb_all }}"
 
@@ -427,10 +396,9 @@ action:
                     target:
                       entity_id: "{{ todo_entity }}"
                   - action: telegram_bot.send_message
-                    continue_on_error: true
                     data:
                       config_entry_id: "{{ bot_config_id }}"
-                      target: "{{ trigger.event.data.chat_id }}"
+                      target: "{{ telegram_chat_id }}"
                       message: "✅ Completed items cleared."
 
               # 🔥 Clear all
@@ -451,10 +419,9 @@ action:
                           data:
                             item: "{{ repeat.item.uid }}"
                   - action: telegram_bot.send_message
-                    continue_on_error: true
                     data:
                       config_entry_id: "{{ bot_config_id }}"
-                      target: "{{ trigger.event.data.chat_id }}"
+                      target: "{{ telegram_chat_id }}"
                       message: "🔥 Entire list cleared."
 
       # ----------------------------------------------------------------
@@ -556,7 +523,6 @@ action:
                 {{ ns.rows }}
 
           - action: telegram_bot.edit_message
-            continue_on_error: true
             data:
               config_entry_id: "{{ bot_config_id }}"
               chat_id: "{{ chat_id }}"
@@ -565,7 +531,6 @@ action:
               inline_keyboard: "{{ keyboard_cb }}"
 
           - action: telegram_bot.answer_callback_query
-            continue_on_error: true
             data:
               config_entry_id: "{{ bot_config_id }}"
               callback_query_id: "{{ trigger.event.data.id }}"
