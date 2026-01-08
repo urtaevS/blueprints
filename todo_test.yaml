@@ -1,0 +1,276 @@
+blueprint:
+  name: Telegram To-do List TEST (edit_message only on change)
+  description: >
+    Базовый вариант:
+    - edit_message только при реальном изменении
+    - inline-кнопки обновляют сообщение
+    - /list работает
+    - внешние изменения пушатся в Telegram
+    - HA 2025.12+
+  domain: automation
+
+  input:
+    todo_entity:
+      name: To-do список
+      selector:
+        entity:
+          domain: todo
+
+    telegram_chat_id:
+      name: Telegram chat_id
+      selector:
+        number:
+
+    bot_config_entry_id:
+      name: Config Entry ID бота
+      selector:
+        text:
+
+mode: restart
+max_exceeded: silent
+
+variables:
+  todo_entity: !input todo_entity
+  chat_id: !input telegram_chat_id
+  bot_id: !input bot_config_entry_id
+
+trigger:
+  - platform: event
+    event_type: telegram_command
+  - platform: event
+    event_type: telegram_text
+  - platform: event
+    event_type: telegram_callback
+
+  - platform: event
+    event_type: todo_item_added
+  - platform: event
+    event_type: todo_item_updated
+  - platform: event
+    event_type: todo_item_removed
+
+condition:
+  - condition: template
+    value_template: >
+      {{ trigger.event.event_type.startswith('todo_item_')
+         or trigger.event.data.chat_id | int == chat_id | int }}
+
+action:
+  - choose:
+
+      ############################################################
+      # /start и /list — показать активные
+      ############################################################
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ trigger.event.event_type == 'telegram_command'
+                 and trigger.event.data.command in ['/start','/list'] }}
+        sequence:
+          - action: todo.get_items
+            target:
+              entity_id: "{{ todo_entity }}"
+            data:
+              status: ['needs_action']
+            response_variable: todo_resp
+
+          - variables:
+              items: "{{ todo_resp[todo_entity]['items'] | default([]) }}"
+              text: >
+                {% if items | length == 0 %}
+                  🛒 Список покупок пуст 🤷‍♂️
+                {% else %}
+                  🛒 Список покупок:
+                {% endif %}
+              keyboard: >
+                {% set r = namespace(v=[]) %}
+                {% for i in items %}
+                  {% set r.v = r.v + [[['✅ ' ~ i.summary, '/done_' ~ i.uid]]] %}
+                {% endfor %}
+                {% set r.v = r.v + [[['📂 Все','/show_all']]] %}
+                {% set r.v = r.v + [[['🗑 Очистить','/clear_completed']]] %}
+                {{ r.v }}
+
+          - action: telegram_bot.send_message
+            data:
+              config_entry_id: "{{ bot_id }}"
+              chat_id: "{{ chat_id }}"
+              message: "{{ text }}"
+              inline_keyboard: "{{ keyboard }}"
+
+      ############################################################
+      # Добавление пункта текстом → новый список
+      ############################################################
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ trigger.event.event_type == 'telegram_text'
+                 and not (trigger.event.data.text | trim).startswith('/') }}
+        sequence:
+          - action: todo.add_item
+            target:
+              entity_id: "{{ todo_entity }}"
+            data:
+              item: "{{ trigger.event.data.text | trim }}"
+
+          - action: todo.get_items
+            target:
+              entity_id: "{{ todo_entity }}"
+            data:
+              status: ['needs_action']
+            response_variable: todo_resp
+
+          - variables:
+              items: "{{ todo_resp[todo_entity]['items'] | default([]) }}"
+              text: "🛒 Список покупок:"
+              keyboard: >
+                {% set r = namespace(v=[]) %}
+                {% for i in items %}
+                  {% set r.v = r.v + [[['✅ ' ~ i.summary, '/done_' ~ i.uid]]] %}
+                {% endfor %}
+                {% set r.v = r.v + [[['📂 Все','/show_all']]] %}
+                {% set r.v = r.v + [[['🗑 Очистить','/clear_completed']]] %}
+                {{ r.v }}
+
+          - action: telegram_bot.send_message
+            data:
+              config_entry_id: "{{ bot_id }}"
+              chat_id: "{{ chat_id }}"
+              message: "{{ text }}"
+              inline_keyboard: "{{ keyboard }}"
+
+      ############################################################
+      # Внешние изменения списка → прислать новый список
+      ############################################################
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.event.event_type.startswith('todo_item_') }}"
+        sequence:
+          - action: todo.get_items
+            target:
+              entity_id: "{{ todo_entity }}"
+            data:
+              status: ['needs_action']
+            response_variable: todo_resp
+
+          - variables:
+              items: "{{ todo_resp[todo_entity]['items'] | default([]) }}"
+              text: >
+                {% if items | length == 0 %}
+                  🛒 Список покупок пуст 🤷‍♂️
+                {% else %}
+                  🛒 Список покупок обновлён:
+                {% endif %}
+              keyboard: >
+                {% set r = namespace(v=[]) %}
+                {% for i in items %}
+                  {% set r.v = r.v + [[['✅ ' ~ i.summary, '/done_' ~ i.uid]]] %}
+                {% endfor %}
+                {% set r.v = r.v + [[['📂 Все','/show_all']]] %}
+                {% set r.v = r.v + [[['🗑 Очистить','/clear_completed']]] %}
+                {{ r.v }}
+
+          - action: telegram_bot.send_message
+            data:
+              config_entry_id: "{{ bot_id }}"
+              chat_id: "{{ chat_id }}"
+              message: "{{ text }}"
+              inline_keyboard: "{{ keyboard }}"
+
+      ############################################################
+      # Inline-кнопки — ИЗМЕНЕНИЯ + edit_message
+      ############################################################
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.event.event_type == 'telegram_callback' }}"
+        sequence:
+          - variables:
+              cb: "{{ trigger.event.data.data }}"
+              msg_id: "{{ trigger.event.data.message.message_id }}"
+
+          ##########################################################
+          # DONE
+          ##########################################################
+          - if:
+              - condition: template
+                value_template: "{{ cb.startswith('/done_') }}"
+            then:
+              - action: todo.update_item
+                target:
+                  entity_id: "{{ todo_entity }}"
+                data:
+                  item: "{{ cb.split('_',1)[1] }}"
+                  status: completed
+
+          ##########################################################
+          # CLEAR COMPLETED
+          ##########################################################
+          - if:
+              - condition: template
+                value_template: "{{ cb == '/clear_completed' }}"
+            then:
+              - action: todo.remove_completed_items
+                target:
+                  entity_id: "{{ todo_entity }}"
+
+          ##########################################################
+          # SHOW ALL / ACTIVE
+          ##########################################################
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ cb == '/show_all' }}"
+                sequence:
+                  - action: todo.get_items
+                    target:
+                      entity_id: "{{ todo_entity }}"
+                    response_variable: todo_resp
+
+              - conditions:
+                  - condition: template
+                    value_template: "{{ cb != '/show_all' }}"
+                sequence:
+                  - action: todo.get_items
+                    target:
+                      entity_id: "{{ todo_entity }}"
+                    data:
+                      status: ['needs_action']
+                    response_variable: todo_resp
+
+          ##########################################################
+          # ОБНОВИТЬ СООБЩЕНИЕ
+          ##########################################################
+          - variables:
+              items: "{{ todo_resp[todo_entity]['items'] | default([]) }}"
+              text: >
+                {% if items | length == 0 %}
+                  🛒 Список покупок пуст 🤷‍♂️
+                {% else %}
+                  🛒 Список покупок:
+                {% endif %}
+              keyboard: >
+                {% set r = namespace(v=[]) %}
+                {% for i in items %}
+                  {% if i.status == 'needs_action' %}
+                    {% set r.v = r.v + [[['✅ ' ~ i.summary, '/done_' ~ i.uid]]] %}
+                  {% else %}
+                    {% set r.v = r.v + [[['☑️ ' ~ i.summary, '/noop']]] %}
+                  {% endif %}
+                {% endfor %}
+                {% set r.v = r.v + [[['📂 Все','/show_all']]] %}
+                {% set r.v = r.v + [[['🗑 Очистить','/clear_completed']]] %}
+                {{ r.v }}
+
+          - action: telegram_bot.edit_message
+            data:
+              config_entry_id: "{{ bot_id }}"
+              chat_id: "{{ chat_id }}"
+              message_id: "{{ msg_id }}"
+              message: "{{ text }}"
+              inline_keyboard: "{{ keyboard }}"
+
+          - action: telegram_bot.answer_callback_query
+            data:
+              config_entry_id: "{{ bot_id }}"
+              callback_query_id: "{{ trigger.event.data.id }}"
+              message: "Готово"
