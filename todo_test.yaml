@@ -6,7 +6,8 @@ blueprint:
     - inline-кнопки обновляют сообщение
     - /list работает
     - защита от дублей
-    - корректная обработка пустых действий (no-op)
+    - динамическое скрытие кнопки Очистить
+    - возврат к Active после очистки
     - HA 2025.12+
   domain: automation
 
@@ -69,6 +70,7 @@ action:
 
           - variables:
               items: "{{ todo_resp[todo_entity]['items'] | default([]) }}"
+              has_completed: false
               text: >
                 {% if items | length == 0 %}
                   🛒 Список покупок пуст 🤷‍♂️
@@ -81,7 +83,6 @@ action:
                   {% set r.v = r.v + [[['✅ ' ~ i.summary, '/done_' ~ i.uid]]] %}
                 {% endfor %}
                 {% set r.v = r.v + [[['📂 Все','/show_all']]] %}
-                {% set r.v = r.v + [[['🗑 Очистить','/clear_completed']]] %}
                 {{ r.v }}
 
           - action: telegram_bot.send_message
@@ -153,7 +154,6 @@ action:
                           {% set r.v = r.v + [[['✅ ' ~ i.summary, '/done_' ~ i.uid]]] %}
                         {% endfor %}
                         {% set r.v = r.v + [[['📂 Все','/show_all']]] %}
-                        {% set r.v = r.v + [[['🗑 Очистить','/clear_completed']]] %}
                         {{ r.v }}
 
                   - action: telegram_bot.send_message
@@ -164,7 +164,7 @@ action:
                       inline_keyboard: "{{ keyboard }}"
 
       ############################################################
-      # Inline-кнопки — DONE / CLEAR / SHOW ALL → edit_message
+      # Inline-кнопки — DONE / CLEAR / SHOW ALL
       ############################################################
       - conditions:
           - condition: template
@@ -176,9 +176,7 @@ action:
               mode: >
                 {% if cb == '/show_all' %}all{% else %}active{% endif %}
 
-          ##########################################################
           # DONE
-          ##########################################################
           - if:
               - condition: template
                 value_template: "{{ cb.startswith('/done_') }}"
@@ -190,9 +188,7 @@ action:
                   item: "{{ cb.split('_',1)[1] }}"
                   status: completed
 
-          ##########################################################
-          # CLEAR COMPLETED
-          ##########################################################
+          # CLEAR → всегда возвращаемся в active
           - if:
               - condition: template
                 value_template: "{{ cb == '/clear_completed' }}"
@@ -200,10 +196,10 @@ action:
               - action: todo.remove_completed_items
                 target:
                   entity_id: "{{ todo_entity }}"
+              - variables:
+                  mode: active
 
-          ##########################################################
-          # ЗАГРУЗКА СПИСКА (all / active)
-          ##########################################################
+          # Загрузка списка
           - choose:
               - conditions:
                   - condition: template
@@ -213,7 +209,6 @@ action:
                     target:
                       entity_id: "{{ todo_entity }}"
                     response_variable: todo_resp
-
               - conditions:
                   - condition: template
                     value_template: "{{ mode == 'active' }}"
@@ -225,11 +220,12 @@ action:
                       status: ['needs_action']
                     response_variable: todo_resp
 
-          ##########################################################
-          # РЕНДЕР
-          ##########################################################
           - variables:
               items: "{{ todo_resp[todo_entity]['items'] | default([]) }}"
+              has_completed: >
+                {{ todo_resp[todo_entity]['items']
+                   | selectattr('status','eq','completed')
+                   | list | length > 0 }}
               text: >
                 {% if items | length == 0 %}
                   🛒 Список покупок пуст 🤷‍♂️
@@ -250,38 +246,32 @@ action:
                 {% else %}
                   {% set r.v = r.v + [[['▶ Активные','/show_active']]] %}
                 {% endif %}
-                {% set r.v = r.v + [[['🗑 Очистить','/clear_completed']]] %}
+                {% if has_completed %}
+                  {% set r.v = r.v + [[['🗑 Очистить','/clear_completed']]] %}
+                {% endif %}
                 {{ r.v }}
 
-          ##########################################################
-          # NO-OP → ТОЛЬКО УВЕДОМЛЕНИЕ, БЕЗ edit_message
-          ##########################################################
-          - choose:
-              - conditions:
-                  - condition: template
-                    value_template: >
-                      {{ cb == '/clear_completed' and items | length == 0 }}
-                sequence:
-                  - action: telegram_bot.answer_callback_query
-                    data:
-                      config_entry_id: "{{ bot_id }}"
-                      callback_query_id: "{{ trigger.event.data.id }}"
-                      message: "ℹ️ Список уже пуст"
+          - action: telegram_bot.edit_message
+            data:
+              config_entry_id: "{{ bot_id }}"
+              chat_id: "{{ chat_id }}"
+              message_id: "{{ msg_id }}"
+              message: "{{ text }}"
+              inline_keyboard: "{{ keyboard }}"
 
-              - conditions:
-                  - condition: template
-                    value_template: true
-                sequence:
-                  - action: telegram_bot.edit_message
-                    data:
-                      config_entry_id: "{{ bot_id }}"
-                      chat_id: "{{ chat_id }}"
-                      message_id: "{{ msg_id }}"
-                      message: "{{ text }}"
-                      inline_keyboard: "{{ keyboard }}"
-
-                  - action: telegram_bot.answer_callback_query
-                    data:
-                      config_entry_id: "{{ bot_id }}"
-                      callback_query_id: "{{ trigger.event.data.id }}"
-                      message: "Готово"
+          - action: telegram_bot.answer_callback_query
+            data:
+              config_entry_id: "{{ bot_id }}"
+              callback_query_id: "{{ trigger.event.data.id }}"
+              message: >
+                {% if cb == '/clear_completed' %}
+                  🗑 Завершённые пункты удалены
+                {% elif cb == '/show_all' %}
+                  📂 Показаны все пункты
+                {% elif cb == '/show_active' %}
+                  ▶ Показаны активные
+                {% elif cb.startswith('/done_') %}
+                  ✅ Пункт выполнен
+                {% else %}
+                  Готово
+                {% endif %}
