@@ -6,6 +6,7 @@ blueprint:
     - inline-кнопки обновляют сообщение
     - /list работает
     - защита от дублей
+    - корректная обработка пустых действий (no-op)
     - HA 2025.12+
   domain: automation
 
@@ -51,7 +52,7 @@ action:
   - choose:
 
       ############################################################
-      # /start и /list — показать активные
+      # /start и /list — показать АКТИВНЫЕ
       ############################################################
       - conditions:
           - condition: template
@@ -101,12 +102,10 @@ action:
         sequence:
           - variables:
               new_item: "{{ trigger.event.data.text | trim }}"
-          
+
           - action: todo.get_items
             target:
               entity_id: "{{ todo_entity }}"
-            data:
-              status: ['needs_action']
             response_variable: current
 
           - variables:
@@ -118,9 +117,6 @@ action:
               is_duplicate: "{{ new_item | lower in existing }}"
 
           - choose:
-              ########################################################
-              # ДУБЛЬ
-              ########################################################
               - conditions:
                   - condition: template
                     value_template: "{{ is_duplicate }}"
@@ -131,9 +127,6 @@ action:
                       chat_id: "{{ chat_id }}"
                       message: "⚠️ Пункт «{{ new_item }}» уже есть в списке"
 
-              ########################################################
-              # НОВЫЙ ПУНКТ
-              ########################################################
               - conditions:
                   - condition: template
                     value_template: "{{ not is_duplicate }}"
@@ -152,7 +145,7 @@ action:
                     response_variable: todo_resp
 
                   - variables:
-                      items: "{{ todo_resp[todo_entity]['items'] | default([]) }}"
+                      items: "{{ todo_resp[todo_entity]['items'] }}"
                       text: "🛒 Список покупок:"
                       keyboard: >
                         {% set r = namespace(v=[]) %}
@@ -180,7 +173,12 @@ action:
           - variables:
               cb: "{{ trigger.event.data.data }}"
               msg_id: "{{ trigger.event.data.message.message_id }}"
+              mode: >
+                {% if cb == '/show_all' %}all{% else %}active{% endif %}
 
+          ##########################################################
+          # DONE
+          ##########################################################
           - if:
               - condition: template
                 value_template: "{{ cb.startswith('/done_') }}"
@@ -192,6 +190,9 @@ action:
                   item: "{{ cb.split('_',1)[1] }}"
                   status: completed
 
+          ##########################################################
+          # CLEAR COMPLETED
+          ##########################################################
           - if:
               - condition: template
                 value_template: "{{ cb == '/clear_completed' }}"
@@ -200,18 +201,22 @@ action:
                 target:
                   entity_id: "{{ todo_entity }}"
 
+          ##########################################################
+          # ЗАГРУЗКА СПИСКА (all / active)
+          ##########################################################
           - choose:
               - conditions:
                   - condition: template
-                    value_template: "{{ cb == '/show_all' }}"
+                    value_template: "{{ mode == 'all' }}"
                 sequence:
                   - action: todo.get_items
                     target:
                       entity_id: "{{ todo_entity }}"
                     response_variable: todo_resp
+
               - conditions:
                   - condition: template
-                    value_template: "{{ cb != '/show_all' }}"
+                    value_template: "{{ mode == 'active' }}"
                 sequence:
                   - action: todo.get_items
                     target:
@@ -220,6 +225,9 @@ action:
                       status: ['needs_action']
                     response_variable: todo_resp
 
+          ##########################################################
+          # РЕНДЕР
+          ##########################################################
           - variables:
               items: "{{ todo_resp[todo_entity]['items'] | default([]) }}"
               text: >
@@ -237,20 +245,43 @@ action:
                     {% set r.v = r.v + [[['☑️ ' ~ i.summary, '/noop']]] %}
                   {% endif %}
                 {% endfor %}
-                {% set r.v = r.v + [[['📂 Все','/show_all']]] %}
+                {% if mode == 'active' %}
+                  {% set r.v = r.v + [[['📂 Все','/show_all']]] %}
+                {% else %}
+                  {% set r.v = r.v + [[['▶ Активные','/show_active']]] %}
+                {% endif %}
                 {% set r.v = r.v + [[['🗑 Очистить','/clear_completed']]] %}
                 {{ r.v }}
 
-          - action: telegram_bot.edit_message
-            data:
-              config_entry_id: "{{ bot_id }}"
-              chat_id: "{{ chat_id }}"
-              message_id: "{{ msg_id }}"
-              message: "{{ text }}"
-              inline_keyboard: "{{ keyboard }}"
+          ##########################################################
+          # NO-OP → ТОЛЬКО УВЕДОМЛЕНИЕ, БЕЗ edit_message
+          ##########################################################
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: >
+                      {{ cb == '/clear_completed' and items | length == 0 }}
+                sequence:
+                  - action: telegram_bot.answer_callback_query
+                    data:
+                      config_entry_id: "{{ bot_id }}"
+                      callback_query_id: "{{ trigger.event.data.id }}"
+                      message: "ℹ️ Список уже пуст"
 
-          - action: telegram_bot.answer_callback_query
-            data:
-              config_entry_id: "{{ bot_id }}"
-              callback_query_id: "{{ trigger.event.data.id }}"
-              message: "Готово"
+              - conditions:
+                  - condition: template
+                    value_template: true
+                sequence:
+                  - action: telegram_bot.edit_message
+                    data:
+                      config_entry_id: "{{ bot_id }}"
+                      chat_id: "{{ chat_id }}"
+                      message_id: "{{ msg_id }}"
+                      message: "{{ text }}"
+                      inline_keyboard: "{{ keyboard }}"
+
+                  - action: telegram_bot.answer_callback_query
+                    data:
+                      config_entry_id: "{{ bot_id }}"
+                      callback_query_id: "{{ trigger.event.data.id }}"
+                      message: "Готово"
