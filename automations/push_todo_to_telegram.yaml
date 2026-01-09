@@ -1,0 +1,40 @@
+alias: Telegram To-do List — Push updates from HA
+description: >
+  Отправляет обновлённый список покупок в Telegram, если To-do изменён в Home
+  Assistant (НЕ из бота).
+triggers:
+  - entity_id: todo.1_testy
+    trigger: state
+conditions:
+  - condition: template
+    value_template: |
+      {{ trigger.to_state is not none
+         and trigger.to_state.context.parent_id is none }}
+actions:
+  - action: todo.get_items
+    target:
+      entity_id: todo.1_testy
+    data:
+      status:
+        - needs_action
+    response_variable: todo_resp
+  - variables:
+      items: "{{ todo_resp['todo.1_testy']['items'] | default([]) }}"
+      text: |
+        {% if items | length == 0 %}
+          🛒 Список покупок пуст 🤷‍♂️
+        {% else %}
+          🛒 Список покупок обновлён:
+        {% endif %}
+      keyboard: >
+        {% set r = namespace(v=[]) %} {% for i in items %}
+          {% set r.v = r.v + [[['✅ ' ~ i.summary, '/done_' ~ i.uid]]] %}
+        {% endfor %} {% set r.v = r.v + [[['📂 Все','/show_all']]] %} {% set r.v
+        = r.v + [[['🗑 Очистить','/clear_completed']]] %} {{ r.v }}
+  - action: telegram_bot.send_message
+    data:
+      config_entry_id: YOUR ID
+      chat_id: YOUR ID
+      message: "{{ text }}"
+      inline_keyboard: "{{ keyboard }}"
+mode: single
