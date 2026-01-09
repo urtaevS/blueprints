@@ -1,5 +1,5 @@
 blueprint:
-  name: Telegram To-do List TEST (Active / All switch)
+  name: Telegram To-do List TEST
   description: >
     Рабочий вариант:
     - inline + edit_message
