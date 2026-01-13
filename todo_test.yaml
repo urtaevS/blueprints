@@ -97,6 +97,101 @@ action:
               chat_id: "{{ chat_id }}"
               message: "{{ text }}"
               inline_keyboard: "{{ keyboard }}"
+              ### REPLY ADDITION (только здесь)
+              keyboard:
+                - "📋 Показать список"
+                - "🗑 Очистить выполненные"
+              resize_keyboard: true
+              one_time_keyboard: false
+
+      ############################################################
+      # REPLY: 📋 Показать список
+      ############################################################
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ trigger.event.event_type == 'telegram_text'
+                 and trigger.event.data.text == '📋 Показать список' }}
+        sequence:
+          - action: todo.get_items
+            target:
+              entity_id: "{{ todo_entity }}"
+            response_variable: todo_resp
+
+          - variables:
+              items: >
+                {{ todo_resp[todo_entity]['items']
+                   | selectattr('status','eq','needs_action')
+                   | list }}
+              has_completed: >
+                {{ todo_resp[todo_entity]['items']
+                   | selectattr('status','eq','completed')
+                   | list | length > 0 }}
+              text: >
+                {% if items | length == 0 %}
+                  🛒 Список покупок пуст 🤷‍♂️
+                {% else %}
+                  🛒 Список покупок:
+                {% endif %}
+              keyboard: >
+                {% set r = namespace(v=[]) %}
+                {% for i in items %}
+                  {% set r.v = r.v + [[['✅ ' ~ i.summary, '/done_' ~ i.uid]]] %}
+                {% endfor %}
+                {% if has_completed %}
+                  {% set r.v = r.v + [[['📂 Все','/show_all']]] %}
+                {% endif %}
+                {{ r.v }}
+
+          - action: telegram_bot.send_message
+            data:
+              config_entry_id: "{{ bot_id }}"
+              chat_id: "{{ chat_id }}"
+              message: "{{ text }}"
+              inline_keyboard: "{{ keyboard }}"
+
+      ############################################################
+      # REPLY: 🗑 Очистить выполненные
+      ############################################################
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ trigger.event.event_type == 'telegram_text'
+                 and trigger.event.data.text == '🗑 Очистить выполненные' }}
+        sequence:
+          - action: todo.remove_completed_items
+            target:
+              entity_id: "{{ todo_entity }}"
+
+          - action: todo.get_items
+            target:
+              entity_id: "{{ todo_entity }}"
+            response_variable: todo_resp
+
+          - variables:
+              items: >
+                {{ todo_resp[todo_entity]['items']
+                   | selectattr('status','eq','needs_action')
+                   | list }}
+              text: >
+                {% if items | length == 0 %}
+                  🛒 Список покупок пуст 🤷‍♂️
+                {% else %}
+                  🛒 Список покупок:
+                {% endif %}
+              keyboard: >
+                {% set r = namespace(v=[]) %}
+                {% for i in items %}
+                  {% set r.v = r.v + [[['✅ ' ~ i.summary, '/done_' ~ i.uid]]] %}
+                {% endfor %}
+                {{ r.v }}
+
+          - action: telegram_bot.send_message
+            data:
+              config_entry_id: "{{ bot_id }}"
+              chat_id: "{{ chat_id }}"
+              message: "{{ text }}"
+              inline_keyboard: "{{ keyboard }}"
 
       ############################################################
       # Добавление пункта текстом (ЗАЩИТА ОТ ДУБЛЕЙ)
@@ -105,6 +200,10 @@ action:
           - condition: template
             value_template: >
               {{ trigger.event.event_type == 'telegram_text'
+                 and trigger.event.data.text not in [
+                   '📋 Показать список',
+                   '🗑 Очистить выполненные'
+                 ]
                  and not (trigger.event.data.text | trim).startswith('/') }}
         sequence:
           - variables:
