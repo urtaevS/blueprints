@@ -7,6 +7,7 @@ blueprint:
     - динамическая кнопка Очистить
     - защита от дублей
     - reopen по ☑️
+    - поддержка добавления через "," и "."
     - HA 2025.12+
   domain: automation
 
@@ -97,7 +98,6 @@ action:
               chat_id: "{{ chat_id }}"
               message: "{{ text }}"
               inline_keyboard: "{{ keyboard }}"
-              ### REPLY ADDITION (только здесь)
               keyboard:
                 - "📋 Показать список"
                 - "🗑 Очистить выполненные"
@@ -194,7 +194,7 @@ action:
               inline_keyboard: "{{ keyboard }}"
 
       ############################################################
-      # Добавление пункта текстом (ЗАЩИТА ОТ ДУБЛЕЙ)
+      # Добавление пункта текстом (МУЛЬТИ + ЗАЩИТА ОТ ДУБЛЕЙ)
       ############################################################
       - conditions:
           - condition: template
@@ -207,74 +207,83 @@ action:
                  and not (trigger.event.data.text | trim).startswith('/') }}
         sequence:
           - variables:
-              raw: "{{ trigger.event.data.text }}"
-              new_item: "{{ raw | lower | replace(' ','') }}"
+              raw_text: "{{ trigger.event.data.text }}"
+              candidates: >
+                {% set parts = raw_text.replace('.', ',').split(',') %}
+                {{ parts | map('trim') | reject('equalto','') | list }}
 
           - action: todo.get_items
             target:
               entity_id: "{{ todo_entity }}"
             response_variable: current
 
-          - variables:
-              active_items: >
-                {{ current[todo_entity]['items']
-                   | selectattr('status','eq','needs_action')
-                   | list }}
-              completed_items: >
-                {{ current[todo_entity]['items']
-                   | selectattr('status','eq','completed')
-                   | list }}
+          - repeat:
+              for_each: "{{ candidates }}"
+              sequence:
+                - variables:
+                    raw: "{{ repeat.item }}"
+                    new_item: "{{ repeat.item | lower | replace(' ','') }}"
 
-              active_norm: >
-                {{ active_items
-                   | map(attribute='summary')
-                   | map('lower')
-                   | map('replace',' ','')
-                   | list }}
+                - variables:
+                    active_items: >
+                      {{ current[todo_entity]['items']
+                         | selectattr('status','eq','needs_action')
+                         | list }}
+                    completed_items: >
+                      {{ current[todo_entity]['items']
+                         | selectattr('status','eq','completed')
+                         | list }}
 
-              completed_norm: >
-                {{ completed_items
-                   | map(attribute='summary')
-                   | map('lower')
-                   | map('replace',' ','')
-                   | list }}
+                    active_norm: >
+                      {{ active_items
+                         | map(attribute='summary')
+                         | map('lower')
+                         | map('replace',' ','')
+                         | list }}
 
-          - choose:
-              - conditions:
-                  - condition: template
-                    value_template: "{{ new_item in active_norm }}"
-                sequence:
-                  - action: telegram_bot.send_message
-                    data:
-                      config_entry_id: "{{ bot_id }}"
-                      chat_id: "{{ chat_id }}"
-                      message: "⚠️ Пункт уже есть в списке"
+                    completed_norm: >
+                      {{ completed_items
+                         | map(attribute='summary')
+                         | map('lower')
+                         | map('replace',' ','')
+                         | list }}
 
-              - conditions:
-                  - condition: template
-                    value_template: "{{ new_item in completed_norm }}"
-                sequence:
-                  - variables:
-                      idx: "{{ completed_norm.index(new_item) }}"
-                      uid: "{{ completed_items[idx].uid }}"
-                  - action: todo.update_item
-                    target:
-                      entity_id: "{{ todo_entity }}"
-                    data:
-                      item: "{{ uid }}"
-                      status: needs_action
+                - choose:
+                    - conditions:
+                        - condition: template
+                          value_template: "{{ new_item in active_norm }}"
+                      sequence:
+                        - action: telegram_bot.send_message
+                          data:
+                            config_entry_id: "{{ bot_id }}"
+                            chat_id: "{{ chat_id }}"
+                            message: "⚠️ Пункт «{{ raw }}» уже есть в списке"
 
-              - conditions:
-                  - condition: template
-                    value_template: >
-                      {{ new_item not in active_norm
-                         and new_item not in completed_norm }}
-                sequence:
-                  - action: todo.add_item
-                    target:
-                      entity_id: "{{ todo_entity }}"
-                    data:
-                      item: "{{ raw | trim }}"
+                    - conditions:
+                        - condition: template
+                          value_template: "{{ new_item in completed_norm }}"
+                      sequence:
+                        - variables:
+                            idx: "{{ completed_norm.index(new_item) }}"
+                            uid: "{{ completed_items[idx].uid }}"
+                        - action: todo.update_item
+                          target:
+                            entity_id: "{{ todo_entity }}"
+                          data:
+                            item: "{{ uid }}"
+                            status: needs_action
+
+                    - conditions:
+                        - condition: template
+                          value_template: >
+                            {{ new_item not in active_norm
+                               and new_item not in completed_norm }}
+                      sequence:
+                        - action: todo.add_item
+                          target:
+                            entity_id: "{{ todo_entity }}"
+                          data:
+                            item: "{{ raw }}"
 
           - action: todo.get_items
             target:
@@ -282,7 +291,6 @@ action:
             response_variable: todo_resp
 
           - variables:
-              mode: active
               items: >
                 {{ todo_resp[todo_entity]['items']
                    | selectattr('status','eq','needs_action')
