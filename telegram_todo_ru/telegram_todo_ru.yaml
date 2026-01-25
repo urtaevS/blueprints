@@ -1,5 +1,5 @@
 blueprint:
-  name: Telegram To-do List TEST
+  name: Telegram To-do List
   description: >
     Базовый вариант:
     - edit_message для inline-кнопок
@@ -95,7 +95,7 @@ action:
           - action: telegram_bot.send_message
             data:
               config_entry_id: "{{ bot_id }}"
-              chat_id: "{{ chat_id }}"
+              target: "{{ chat_id }}"
               message: "{{ text }}"
               inline_keyboard: "{{ keyboard }}"
               keyboard:
@@ -103,6 +103,325 @@ action:
                 - "🗑 Очистить выполненные"
               resize_keyboard: true
               one_time_keyboard: false
+
+      ############################################################
+      # REPLY: 📋 Показать список
+      ############################################################
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ trigger.event.event_type == 'telegram_text'
+                 and trigger.event.data.text == '📋 Показать список' }}
+        sequence:
+          - action: todo.get_items
+            target:
+              entity_id: "{{ todo_entity }}"
+            response_variable: todo_resp
+
+          - variables:
+              items: >
+                {{ todo_resp[todo_entity]['items']
+                   | selectattr('status','eq','needs_action')
+                   | list }}
+              has_completed: >
+                {{ todo_resp[todo_entity]['items']
+                   | selectattr('status','eq','completed')
+                   | list | length > 0 }}
+              text: >
+                {% if items | length == 0 %}
+                  🛒 Список покупок пуст 🤷‍♂️
+                {% else %}
+                  🛒 Список покупок:
+                {% endif %}
+              keyboard: >
+                {% set r = namespace(v=[]) %}
+                {% for i in items %}
+                  {% set r.v = r.v + [[['✅ ' ~ i.summary, '/done_' ~ i.uid]]] %}
+                {% endfor %}
+                {% if has_completed %}
+                  {% set r.v = r.v + [[['📂 Все','/show_all']]] %}
+                {% endif %}
+                {{ r.v }}
+
+          - action: telegram_bot.send_message
+            data:
+              config_entry_id: "{{ bot_id }}"
+              target: "{{ chat_id }}"
+              message: "{{ text }}"
+              inline_keyboard: "{{ keyboard }}"
+
+      ############################################################
+      # REPLY: 🗑 Очистить выполненные
+      ############################################################
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ trigger.event.event_type == 'telegram_text'
+                 and trigger.event.data.text == '🗑 Очистить выполненные' }}
+        sequence:
+          - action: todo.remove_completed_items
+            target:
+              entity_id: "{{ todo_entity }}"
+
+          - action: todo.get_items
+            target:
+              entity_id: "{{ todo_entity }}"
+            response_variable: todo_resp
+
+          - variables:
+              items: >
+                {{ todo_resp[todo_entity]['items']
+                   | selectattr('status','eq','needs_action')
+                   | list }}
+              text: >
+                {% if items | length == 0 %}
+                  🛒 Список покупок пуст 🤷‍♂️
+                {% else %}
+                  🛒 Список покупок:
+                {% endif %}
+              keyboard: >
+                {% set r = namespace(v=[]) %}
+                {% for i in items %}
+                  {% set r.v = r.v + [[['✅ ' ~ i.summary, '/done_' ~ i.uid]]] %}
+                {% endfor %}
+                {{ r.v }}
+
+          - action: telegram_bot.send_message
+            data:
+              config_entry_id: "{{ bot_id }}"
+              target: "{{ chat_id }}"
+              message: "{{ text }}"
+              inline_keyboard: "{{ keyboard }}"
+
+      ############################################################
+      # Добавление пункта текстом (МУЛЬТИ + ЗАЩИТА ОТ ДУБЛЕЙ)
+      ############################################################
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ trigger.event.event_type == 'telegram_text'
+                 and trigger.event.data.text not in [
+                   '📋 Показать список',
+                   '🗑 Очистить выполненные'
+                 ]
+                 and not (trigger.event.data.text | trim).startswith('/') }}
+        sequence:
+          - variables:
+              raw_text: "{{ trigger.event.data.text }}"
+              candidates: >
+                {% set parts = raw_text.replace('.', ',').split(',') %}
+                {{ parts | map('trim') | reject('equalto','') | list }}
+
+          - action: todo.get_items
+            target:
+              entity_id: "{{ todo_entity }}"
+            response_variable: current
+
+          - repeat:
+              for_each: "{{ candidates }}"
+              sequence:
+                - variables:
+                    raw: "{{ repeat.item }}"
+                    new_item: "{{ repeat.item | lower | replace(' ','') }}"
+
+                - variables:
+                    active_items: >
+                      {{ current[todo_entity]['items']
+                         | selectattr('status','eq','needs_action')
+                         | list }}
+                    completed_items: >
+                      {{ current[todo_entity]['items']
+                         | selectattr('status','eq','completed')
+                         | list }}
+
+                    active_norm: >
+                      {{ active_items
+                         | map(attribute='summary')
+                         | map('lower')
+                         | map('replace',' ','')
+                         | list }}
+
+                    completed_norm: >
+                      {{ completed_items
+                         | map(attribute='summary')
+                         | map('lower')
+                         | map('replace',' ','')
+                         | list }}
+
+                - choose:
+                    - conditions:
+                        - condition: template
+                          value_template: "{{ new_item in active_norm }}"
+                      sequence:
+                        - action: telegram_bot.send_message
+                          data:
+                            config_entry_id: "{{ bot_id }}"
+                            target: "{{ chat_id }}"
+                            message: "⚠️ Пункт «{{ raw }}» уже есть в списке"
+
+                    - conditions:
+                        - condition: template
+                          value_template: "{{ new_item in completed_norm }}"
+                      sequence:
+                        - variables:
+                            idx: "{{ completed_norm.index(new_item) }}"
+                            uid: "{{ completed_items[idx].uid }}"
+                        - action: todo.update_item
+                          target:
+                            entity_id: "{{ todo_entity }}"
+                          data:
+                            item: "{{ uid }}"
+                            status: needs_action
+
+                    - conditions:
+                        - condition: template
+                          value_template: >
+                            {{ new_item not in active_norm
+                               and new_item not in completed_norm }}
+                      sequence:
+                        - action: todo.add_item
+                          target:
+                            entity_id: "{{ todo_entity }}"
+                          data:
+                            item: "{{ raw }}"
+
+          - action: todo.get_items
+            target:
+              entity_id: "{{ todo_entity }}"
+            response_variable: todo_resp
+
+          - variables:
+              items: >
+                {{ todo_resp[todo_entity]['items']
+                   | selectattr('status','eq','needs_action')
+                   | list }}
+              has_completed: >
+                {{ todo_resp[todo_entity]['items']
+                   | selectattr('status','eq','completed')
+                   | list | length > 0 }}
+              text: >
+                {% if items | length == 0 %}
+                  🛒 Список покупок пуст 🤷‍♂️
+                {% else %}
+                  🛒 Список покупок:
+                {% endif %}
+              keyboard: >
+                {% set r = namespace(v=[]) %}
+                {% for i in items %}
+                  {% set r.v = r.v + [[['✅ ' ~ i.summary, '/done_' ~ i.uid]]] %}
+                {% endfor %}
+                {% if has_completed %}
+                  {% set r.v = r.v + [[['📂 Все','/show_all']]] %}
+                {% endif %}
+                {{ r.v }}
+
+          - action: telegram_bot.send_message
+            data:
+              config_entry_id: "{{ bot_id }}"
+              target: "{{ chat_id }}"
+              message: "{{ text }}"
+              inline_keyboard: "{{ keyboard }}"
+
+      ############################################################
+      # Inline-кнопки — UI (edit_message)
+      ############################################################
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.event.event_type == 'telegram_callback' }}"
+        sequence:
+          - variables:
+              cb: "{{ trigger.event.data.data }}"
+              msg_id: "{{ trigger.event.data.message.message_id }}"
+
+          - if:
+              - condition: template
+                value_template: "{{ cb.startswith('/done_') }}"
+            then:
+              - action: todo.update_item
+                target:
+                  entity_id: "{{ todo_entity }}"
+                data:
+                  item: "{{ cb.split('_',1)[1] }}"
+                  status: completed
+
+          - if:
+              - condition: template
+                value_template: "{{ cb.startswith('/reopen_') }}"
+            then:
+              - action: todo.update_item
+                target:
+                  entity_id: "{{ todo_entity }}"
+                data:
+                  item: "{{ cb.split('_',1)[1] }}"
+                  status: needs_action
+
+          - if:
+              - condition: template
+                value_template: "{{ cb == '/clear_completed' }}"
+            then:
+              - action: todo.remove_completed_items
+                target:
+                  entity_id: "{{ todo_entity }}"
+
+          - action: todo.get_items
+            target:
+              entity_id: "{{ todo_entity }}"
+            response_variable: todo_resp
+
+          - variables:
+              items_all: "{{ todo_resp[todo_entity]['items'] | default([]) }}"
+              has_completed: >
+                {{ items_all
+                   | selectattr('status','eq','completed')
+                   | list | length > 0 }}
+              mode: >
+                {% if cb == '/show_all' %}all{% else %}active{% endif %}
+              items: >
+                {% if mode == 'all' %}
+                  {{ items_all }}
+                {% else %}
+                  {{ items_all
+                     | selectattr('status','eq','needs_action')
+                     | list }}
+                {% endif %}
+              text: >
+                {% if items | length == 0 %}
+                  🛒 Список покупок пуст 🤷‍♂️
+                {% else %}
+                  🛒 Список покупок:
+                {% endif %}
+              keyboard: >
+                {% set r = namespace(v=[]) %}
+                {% for i in items %}
+                  {% if i.status == 'needs_action' %}
+                    {% set r.v = r.v + [[['✅ ' ~ i.summary, '/done_' ~ i.uid]]] %}
+                  {% else %}
+                    {% set r.v = r.v + [[['☑️ ' ~ i.summary, '/reopen_' ~ i.uid]]] %}
+                  {% endif %}
+                {% endfor %}
+                {% if has_completed %}
+                  {% if mode == 'active' %}
+                    {% set r.v = r.v + [[['📂 Все','/show_all']]] %}
+                  {% else %}
+                    {% set r.v = r.v + [[['🛒 Активные','/show_active']]] %}
+                  {% endif %}
+                  {% set r.v = r.v + [[['🗑 Очистить','/clear_completed']]] %}
+                {% endif %}
+                {{ r.v }}
+
+          - action: telegram_bot.edit_message
+            data:
+              config_entry_id: "{{ bot_id }}"
+              chat_id: "{{ chat_id }}"
+              message_id: "{{ msg_id }}"
+              message: "{{ text }}"
+              inline_keyboard: "{{ keyboard }}"
+
+          - action: telegram_bot.answer_callback_query
+            data:
+              config_entry_id: "{{ bot_id }}"
+              callback_query_id: "{{ trigger.event.data.id }}"
+              message: "Готово"
 
       ############################################################
       # REPLY: 📋 Показать список
