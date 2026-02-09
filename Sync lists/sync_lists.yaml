@@ -1,0 +1,78 @@
+blueprint:
+  name: Sync To-Do lists
+  description: Manually syncs active items from one to-do list to another using UID.
+  domain: script
+  input:
+    source_list:
+      name: Source To-Do List
+      description: "Select the source To-Do list to sync from"
+      selector:
+        entity:
+          domain: todo
+    target_list:
+      name: Target To-Do List
+      description: "Select the target To-Do list to sync to"
+      selector:
+        entity:
+          domain: todo
+
+sequence:
+  - variables:
+      src: !input source_list
+      tgt: !input target_list
+
+  - action: todo.get_items
+    target:
+      entity_id: "{{ src }}"
+    data:
+      status: needs_action
+    response_variable: source_items
+
+  - action: todo.get_items
+    target:
+      entity_id: "{{ tgt }}"
+    data:
+      status: needs_action
+    response_variable: target_items
+
+  - variables:
+      source_list_items: "{{ source_items.get(src, {}).get('items', []) }}"
+      target_list_items: "{{ target_items.get(tgt, {}).get('items', []) }}"
+      source_count: "{{ source_list_items | length }}"
+      target_count: "{{ target_list_items | length }}"
+
+  # Add missing items
+  - repeat:
+      count: "{{ source_count }}"
+      sequence:
+        - variables:
+            item: "{{ source_list_items[repeat.index - 1] }}"
+            item_uid: "{{ item.uid }}"
+
+        - condition: template
+          value_template: >
+            {{ item_uid not in (target_list_items | map(attribute='uid') | list) }}
+
+        - action: todo.add_item
+          target:
+            entity_id: "{{ tgt }}"
+          data:
+            item: "{{ item.summary }}"
+
+  # Remove extra items in target
+  - repeat:
+      count: "{{ target_count }}"
+      sequence:
+        - variables:
+            item: "{{ target_list_items[repeat.index - 1] }}"
+            item_uid: "{{ item.uid }}"
+
+        - condition: template
+          value_template: >
+            {{ item_uid not in (source_list_items | map(attribute='uid') | list) }}
+
+        - action: todo.remove_item
+          target:
+            entity_id: "{{ tgt }}"
+          data:
+            item: "{{ item_uid }}"
