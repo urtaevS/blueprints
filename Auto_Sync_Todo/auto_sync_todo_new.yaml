@@ -1,0 +1,101 @@
+blueprint:
+  name: Todo — Auto sync new items
+  description: >
+    Автоматически синхронизирует НОВЫЕ пункты To-Do списка.
+    Trigger — diff по helper (как temp_list).
+    Логика добавления — идентична ручному script (UID + summary).
+    Совместимо с Home Assistant 2026+.
+  domain: automation
+
+  input:
+    source_list:
+      name: Source To-Do list
+      selector:
+        entity:
+          domain: todo
+
+    target_list:
+      name: Target To-Do list
+      selector:
+        entity:
+          domain: todo
+
+    snapshot_helper:
+      name: Change detector helper (input_text)
+      selector:
+        entity:
+          domain: input_text
+
+mode: single
+
+triggers:
+  - platform: time_pattern
+    minutes: "/1"
+
+actions:
+  - variables:
+      src: !input source_list
+      tgt: !input target_list
+      snapshot: !input snapshot_helper
+
+  # Получаем source и target
+  - action: todo.get_items
+    target:
+      entity_id: "{{ src }}"
+    data:
+      status: needs_action
+    response_variable: source_items
+
+  - action: todo.get_items
+    target:
+      entity_id: "{{ tgt }}"
+    data:
+      status: needs_action
+    response_variable: target_items
+
+  - variables:
+      source_list_items: "{{ source_items.get(src, {}).get('items', []) }}"
+      target_list_items: "{{ target_items.get(tgt, {}).get('items', []) }}"
+
+      # лёгкий snapshot ТОЛЬКО для детекта изменений
+      current_snapshot: >
+        {{ source_list_items
+           | map(attribute='uid')
+           | list | sort | join(',') }}
+
+      previous_snapshot: "{{ states(snapshot) }}"
+
+  # 🔥 ТРИГГЕР ИЗМЕНЕНИЯ (как temp_list)
+  - condition: template
+    value_template: "{{ current_snapshot != previous_snapshot }}"
+
+  # ====== ЛОГИКА ИЗ ТВОЕГО SCRIPT ======
+
+  - variables:
+      target_uids: "{{ target_list_items | map(attribute='uid') | list }}"
+      target_summaries: "{{ target_list_items | map(attribute='summary') | list }}"
+
+  - repeat:
+      for_each: "{{ source_list_items }}"
+      sequence:
+        - variables:
+            item_uid: "{{ repeat.item.uid }}"
+            item_summary: "{{ repeat.item.summary }}"
+
+        - condition: template
+          value_template: >
+            {{ item_uid not in target_uids
+               and item_summary not in target_summaries }}
+
+        - action: todo.add_item
+          target:
+            entity_id: "{{ tgt }}"
+          data:
+            item: "{{ item_summary }}"
+
+  # ====== обновляем helper ======
+  - action: input_text.set_value
+    target:
+      entity_id: "{{ snapshot }}"
+    data:
+      value: "{{ current_snapshot }}"
