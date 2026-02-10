@@ -1,26 +1,44 @@
 blueprint:
   name: Sync To-Do lists
-  description: Manually syncs active items from one to-do list to another using UID.
+  description: >
+    Manually syncs active items from one to-do list to another using UID.
+    Supports two modes:
+    - Add only new items
+    - Full two-way sync (add + remove)
   domain: script
+
   input:
     source_list:
       name: Source To-Do List
-      description: "Select the source To-Do list to sync from"
+      description: Select the source To-Do list to sync from
       selector:
         entity:
           domain: todo
+
     target_list:
       name: Target To-Do List
-      description: "Select the target To-Do list to sync to"
+      description: Select the target To-Do list to sync to
       selector:
         entity:
           domain: todo
+
+    full_sync:
+      name: Full sync mode
+      description: >
+        If enabled — target list will be fully synchronized
+        (missing items added, extra items removed).
+        If disabled — only new items will be added, nothing removed.
+      default: false
+      selector:
+        boolean: {}
 
 sequence:
   - variables:
       src: !input source_list
       tgt: !input target_list
+      full_sync: !input full_sync
 
+  # Get active items from source list
   - action: todo.get_items
     target:
       entity_id: "{{ src }}"
@@ -28,6 +46,7 @@ sequence:
       status: needs_action
     response_variable: source_items
 
+  # Get active items from target list
   - action: todo.get_items
     target:
       entity_id: "{{ tgt }}"
@@ -41,7 +60,7 @@ sequence:
       source_count: "{{ source_list_items | length }}"
       target_count: "{{ target_list_items | length }}"
 
-  # Add missing items
+  # Add missing items to target list
   - repeat:
       count: "{{ source_count }}"
       sequence:
@@ -59,7 +78,11 @@ sequence:
           data:
             item: "{{ item.summary }}"
 
-  # Remove extra items in target
+  # Remove extra items from target list
+  # Executed ONLY when full_sync mode is enabled
+  - condition: template
+    value_template: "{{ full_sync }}"
+
   - repeat:
       count: "{{ target_count }}"
       sequence:
