@@ -1,0 +1,78 @@
+blueprint:
+  name: Todo — Sync NEW items only
+  description: >
+    Автоматически синхронизирует ТОЛЬКО новые пункты To-Do списка.
+    Использует polling + diff (как в проекте hectorzin).
+    Совместимо с Home Assistant 2026+.
+  domain: automation
+
+  input:
+    source_list:
+      name: Source To-Do list
+      selector:
+        entity:
+          domain: todo
+
+    target_list:
+      name: Target To-Do list
+      selector:
+        entity:
+          domain: todo
+
+    snapshot_helper:
+      name: Snapshot helper (input_text)
+      description: Helper used as temp_list (diff memory).
+      selector:
+        entity:
+          domain: input_text
+
+mode: single
+
+triggers:
+  - platform: time_pattern
+    minutes: "/3"
+
+actions:
+  - variables:
+      source: !input source_list
+      target: !input target_list
+      snapshot: !input snapshot_helper
+
+  - action: todo.get_items
+    target:
+      entity_id: "{{ source }}"
+    data:
+      status: needs_action
+    response_variable: current
+
+  - variables:
+      current_items: >
+        {{ current.get(source, {}).get('items', [])
+           | map(attribute='summary')
+           | list | sort }}
+
+      previous_items: >
+        {{ states(snapshot).split('||')
+           if states(snapshot) not in ['', 'unknown', 'unavailable']
+           else [] }}
+
+      new_items: >
+        {{ current_items | reject('in', previous_items) | list }}
+
+  - condition: template
+    value_template: "{{ new_items | length > 0 }}"
+
+  - repeat:
+      for_each: "{{ new_items }}"
+      sequence:
+        - action: todo.add_item
+          target:
+            entity_id: "{{ target }}"
+          data:
+            item: "{{ repeat.item }}"
+
+  - action: input_text.set_value
+    target:
+      entity_id: "{{ snapshot }}"
+    data:
+      value: "{{ current_items | join('||') }}"
