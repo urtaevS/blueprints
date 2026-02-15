@@ -28,6 +28,22 @@ blueprint:
       selector:
         text:
 
+    to_keep_script:
+      name: Скрипт для кнопки «To Keep»
+      description: Запускается при нажатии кнопки To Keep
+      default: []
+      selector:
+        entity:
+          domain: script
+
+    to_ha_script:
+      name: Скрипт для кнопки «To HA»
+      description: Запускается при нажатии кнопки To HA
+      default: []
+      selector:
+        entity:
+          domain: script
+
 mode: restart
 max_exceeded: silent
 
@@ -35,6 +51,8 @@ variables:
   todo_entity: !input todo_entity
   chat_id: !input telegram_chat_id
   bot_id: !input bot_config_entry_id
+  to_keep_script: !input to_keep_script
+  to_ha_script: !input to_ha_script
 
 trigger:
   - platform: event
@@ -53,6 +71,34 @@ action:
   - choose:
 
       ############################################################
+      # Кнопка: To Keep
+      ############################################################
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ trigger.event.event_type == 'telegram_text'
+                 and trigger.event.data.text == 'To Keep'
+                 and to_keep_script != [] }}
+        sequence:
+          - action: script.turn_on
+            target:
+              entity_id: "{{ to_keep_script }}"
+
+      ############################################################
+      # Кнопка: To HA
+      ############################################################
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ trigger.event.event_type == 'telegram_text'
+                 and trigger.event.data.text == 'To HA'
+                 and to_ha_script != [] }}
+        sequence:
+          - action: script.turn_on
+            target:
+              entity_id: "{{ to_ha_script }}"
+
+      ############################################################
       # /start и /list — показать активные
       ############################################################
       - conditions:
@@ -67,7 +113,6 @@ action:
             response_variable: todo_resp
 
           - variables:
-              mode: active
               items: >
                 {{ todo_resp[todo_entity]['items']
                    | selectattr('status','eq','needs_action')
@@ -101,8 +146,10 @@ action:
               keyboard:
                 - "📋 Показать список"
                 - "🗑 Очистить выполненные"
+                - "To Keep, To HA"
               resize_keyboard: true
               one_time_keyboard: false
+
 
       ############################################################
       # REPLY: 📋 Показать список
