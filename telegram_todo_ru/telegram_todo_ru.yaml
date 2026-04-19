@@ -96,7 +96,7 @@ condition:
       {{
         trigger.event.data.chat_id | int == chat_id | int
         and
-        trigger.event.data.config_entry_id == bot_id
+        trigger.event.data.bot.config_entry_id == bot_id
       }}
 
 action:
