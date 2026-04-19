@@ -8,6 +8,7 @@ blueprint:
     - защита от дублей
     - reopen по ☑️
     - поддержка добавления через "," и "."
+    - синхронизация через скрипты (опционально)
     - HA 2025.12+
   domain: automation
 
@@ -28,6 +29,45 @@ blueprint:
       selector:
         text:
 
+    sync_script_1_name:
+      name: Название кнопки скрипта 1
+      selector:
+        text: {}
+      default: "Скрипт 1"
+
+    sync_script_1:
+      name: Скрипт синхронизации 1 (опционально)
+      selector:
+        entity:
+          domain: script
+      default: ""
+
+    sync_script_2_name:
+      name: Название кнопки скрипта 2
+      selector:
+        text: {}
+      default: "Скрипт 2"
+      
+    sync_script_2:
+      name: Скрипт синхронизации 2 (опционально)
+      selector:
+        entity:
+          domain: script
+      default: ""
+
+    sync_script_3_name:
+      name: Название кнопки скрипта 3
+      selector:
+        text: {}
+      default: "Скрипт 3"
+      
+    sync_script_3:
+      name: Скрипт синхронизации 3 (опционально)
+      selector:
+        entity:
+          domain: script
+      default: ""
+
 mode: restart
 max_exceeded: silent
 
@@ -35,6 +75,12 @@ variables:
   todo_entity: !input todo_entity
   chat_id: !input telegram_chat_id
   bot_id: !input bot_config_entry_id
+  sync_script_1: !input sync_script_1
+  sync_script_2: !input sync_script_2
+  sync_script_3: !input sync_script_3
+  sync_script_1_name: !input sync_script_1_name
+  sync_script_2_name: !input sync_script_2_name
+  sync_script_3_name: !input sync_script_3_name
 
 trigger:
   - platform: event
@@ -61,16 +107,40 @@ action:
               {{ trigger.event.event_type == 'telegram_command'
                  and trigger.event.data.command == '/start' }}
         sequence:
-          - action: telegram_bot.send_message
-            data:
-              config_entry_id: "{{ bot_id }}"
-              target: "{{ chat_id }}"
-              message: "Используй кнопки внизу ⬇️"
-              keyboard:
-                - "📋 Показать список"
-                - "🗑 Очистить выполненные"
-              resize_keyboard: true
-              one_time_keyboard: false
+          - variables:
+              has_scripts: >
+                {{ sync_script_1 != '' or sync_script_2 != '' or sync_script_3 != '' }}
+
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ has_scripts }}"
+                sequence:
+                  - action: telegram_bot.send_message
+                    data:
+                      config_entry_id: "{{ bot_id }}"
+                      target: "{{ chat_id }}"
+                      message: "Используй кнопки внизу ⬇️"
+                      keyboard:
+                        - "📋 Показать список"
+                        - "🗑 Очистить выполненные"
+                        - "🔄 Синхронизация"
+                      resize_keyboard: true
+                      one_time_keyboard: false
+              - conditions:
+                  - condition: template
+                    value_template: "{{ not has_scripts }}"
+                sequence:
+                  - action: telegram_bot.send_message
+                    data:
+                      config_entry_id: "{{ bot_id }}"
+                      target: "{{ chat_id }}"
+                      message: "Используй кнопки внизу ⬇️"
+                      keyboard:
+                        - "📋 Показать список"
+                        - "🗑 Очистить выполненные"
+                      resize_keyboard: true
+                      one_time_keyboard: false
 
       ############################################################
       # /list — показать активные (аналогично кнопке "📋 Показать список")
@@ -208,6 +278,111 @@ action:
               inline_keyboard: "{{ keyboard }}"
 
       ############################################################
+      # REPLY: 🔄 Синхронизация — показать inline-кнопки скриптов
+      ############################################################
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ trigger.event.event_type == 'telegram_text'
+                 and trigger.event.data.text == '🔄 Синхронизация' }}
+        sequence:
+          - variables:
+              sync_keyboard: >
+                {% set scripts = [] %}
+                {% if sync_script_1 and sync_script_1 != '' %}
+                  {% set scripts = scripts + [[['🔹 ' ~ sync_script_1_name, '/sync_1']]] %}
+                {% endif %}
+                {% if sync_script_2 and sync_script_2 != '' %}
+                  {% set scripts = scripts + [[['🔹 ' ~ sync_script_2_name, '/sync_2']]] %}
+                {% endif %}
+                {% if sync_script_3 and sync_script_3 != '' %}
+                  {% set scripts = scripts + [[['🔹 ' ~ sync_script_3_name, '/sync_3']]] %}
+                {% endif %}
+                {{ scripts }}
+
+          - action: telegram_bot.send_message
+            data:
+              config_entry_id: "{{ bot_id }}"
+              target: "{{ chat_id }}"
+              message: "Выбери действие"
+              inline_keyboard: "{{ sync_keyboard }}"
+
+      ############################################################
+      # CALLBACK: Запуск скрипта 1
+      ############################################################
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ trigger.event.event_type == 'telegram_callback'
+                 and trigger.event.data.data == '/sync_1'
+                 and sync_script_1 != '' }}
+        sequence:
+          - action: script.turn_on
+            target:
+              entity_id: "{{ sync_script_1 }}"
+          - action: telegram_bot.edit_message
+            data:
+              config_entry_id: "{{ bot_id }}"
+              chat_id: "{{ chat_id }}"
+              message_id: "{{ trigger.event.data.message.message_id }}"
+              message: "Выполнено"
+          - action: telegram_bot.answer_callback_query
+            data:
+              config_entry_id: "{{ bot_id }}"
+              callback_query_id: "{{ trigger.event.data.id }}"
+              message: "Скрипт запущен ✅"
+
+      ############################################################
+      # CALLBACK: Запуск скрипта 2
+      ############################################################
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ trigger.event.event_type == 'telegram_callback'
+                 and trigger.event.data.data == '/sync_2'
+                 and sync_script_2 != '' }}
+        sequence:
+          - action: script.turn_on
+            target:
+              entity_id: "{{ sync_script_2 }}"
+          - action: telegram_bot.edit_message
+            data:
+              config_entry_id: "{{ bot_id }}"
+              chat_id: "{{ chat_id }}"
+              message_id: "{{ trigger.event.data.message.message_id }}"
+              message: "Выполнено"
+          - action: telegram_bot.answer_callback_query
+            data:
+              config_entry_id: "{{ bot_id }}"
+              callback_query_id: "{{ trigger.event.data.id }}"
+              message: "Скрипт запущен ✅"
+
+      ############################################################
+      # CALLBACK: Запуск скрипта 3
+      ############################################################
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ trigger.event.event_type == 'telegram_callback'
+                 and trigger.event.data.data == '/sync_3'
+                 and sync_script_3 != '' }}
+        sequence:
+          - action: script.turn_on
+            target:
+              entity_id: "{{ sync_script_3 }}"
+          - action: telegram_bot.edit_message
+            data:
+              config_entry_id: "{{ bot_id }}"
+              chat_id: "{{ chat_id }}"
+              message_id: "{{ trigger.event.data.message.message_id }}"
+              message: "Выполнено"
+          - action: telegram_bot.answer_callback_query
+            data:
+              config_entry_id: "{{ bot_id }}"
+              callback_query_id: "{{ trigger.event.data.id }}"
+              message: "Скрипт запущен ✅"
+
+      ############################################################
       # Добавление пункта текстом (МУЛЬТИ + ЗАЩИТА ОТ ДУБЛЕЙ)
       ############################################################
       - conditions:
@@ -216,7 +391,8 @@ action:
               {{ trigger.event.event_type == 'telegram_text'
                  and trigger.event.data.text not in [
                    '📋 Показать список',
-                   '🗑 Очистить выполненные'
+                   '🗑 Очистить выполненные',
+                   '🔄 Синхронизация'
                  ]
                  and not (trigger.event.data.text | trim).startswith('/') }}
         sequence:
@@ -337,11 +513,13 @@ action:
               inline_keyboard: "{{ keyboard }}"
 
       ############################################################
-      # Inline-кнопки — UI (edit_message)
+      # Inline-кнопки — UI (edit_message) — ОБЫЧНЫЕ CALLBACK
       ############################################################
       - conditions:
           - condition: template
-            value_template: "{{ trigger.event.event_type == 'telegram_callback' }}"
+            value_template: >
+              {{ trigger.event.event_type == 'telegram_callback'
+                 and not trigger.event.data.data.startswith('/sync_') }}
         sequence:
           - variables:
               cb: "{{ trigger.event.data.data }}"
