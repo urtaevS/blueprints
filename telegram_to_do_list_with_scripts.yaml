@@ -463,7 +463,7 @@ action:
                           data:
                             config_entry_id: "{{ bot_id }}"
                             chat_id: "{{ chat_id }}"
-                            message: "⚠️ "{{ raw }}" is already in the list"
+                            message: '⚠️ "{{ raw }}" is already in the list'
 
                     - conditions:
                         - condition: template
