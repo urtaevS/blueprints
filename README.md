@@ -1,4 +1,4 @@
-# 🏠 Home Assistant Blueprints
+# 🏠 Home Assistant Scripts
 
 Коллекция blueprint'ов и автоматизаций для Home Assistant. Управление списками через Telegram, синхронизация To-do списков и полезные скрипты.
 
@@ -11,21 +11,17 @@ Blueprint'ы для управления списками покупок/дел 
 | Проект | Описание | Язык |
 |--------|----------|------|
 | [Telegram To-do List (RU)](telegram-todo-list-ru/) | Полнофункциональный blueprint с inline-кнопками, reply-клавиатурой и поддержкой скриптов синхронизации | 🇷🇺 Русский |
-| [Telegram To-do List](telegram_to_do_list.yaml) | Базовый вариант — inline-кнопки, переключение Active/All, защита от дублей, HA 2026.04+ | 🇬🇧 English |
 | [Telegram To-do List + Scripts](telegram_to_do_list_with_scripts.yaml) | Вариант с поддержкой скриптов синхронизации (до 3 скриптов), HA 2025.12+ | 🇬🇧 English |
-| [Telegram To-do List TEST](todo_test.yaml) | Тестовая версия русского blueprint'а | 🇷🇺 Русский |
 
 ---
 
 ## 🔄 Синхронизация To-do списков
 
-Скрипты и автоматизации для синхронизации данных между To-do списками.
+Скрипты для синхронизации данных между To-do списками.
 
 | Проект | Описание | Тип |
 |--------|----------|-----|
 | [Sync To-Do Lists](Sync%20lists/sync_lists_manual.yaml) | Ручная синхронизация активных пунктов между списками (по UID). Два режима: добавление новых / полная двусторонняя синхронизация | Script blueprint |
-| [Todo — Auto sync new items](Auto_Sync_Todo/auto_sync_todo_new.yaml) | Автоматическая синхронизация только новых пунктов через diff по helper | Automation blueprint |
-| [Todo — Sync NEW items only](Sync_todo/auto_sync_todo_new.yaml) | Автоматическая синхронизация новых пунктов через polling + diff (совместимо с HA 2026+) | Automation blueprint |
 
 ---
 
@@ -47,19 +43,20 @@ Blueprint'ы для управления списками покупок/дел 
 ## 📁 Структура репозитория
 
 ```
-blueprints/
-├── telegram-todo-list-ru/       # 🇷🇺 Telegram To-do List (полный)
-├── telegram_to_do_list.yaml     # 🇬🇧 Telegram To-do List (базовый)
-├── telegram_to_do_list_with_scripts.yaml  # 🇬🇧 Telegram To-do + Scripts
-├── todo_test.yaml               # Тестовый blueprint
-├── Auto_Sync_Todo/              # Авто-синхронизация (diff)
-├── Sync_todo/                   # Синхронизация (polling)
-├── Sync lists/                  # Ручная синхронизация
-└── automations/                 # Push-уведомления в Telegram
+Home assistant Scripts/
+├── telegram-todo-list-ru/                # 🇷🇺 Telegram To-do List (полный)
+│   ├── README.md                         #    Описание проекта
+│   ├── CHANGELOG.MD                      #    Журнал изменений
+│   └── telegram_todo_ru.yaml             #    Blueprint
+├── telegram_to_do_list_with_scripts.yaml # 🇬🇧 Telegram To-do + Scripts
+├── Sync lists/                           # Ручная синхронизация списков
+│   └── sync_lists_manual.yaml
+└── automations/                          # Push-уведомления в Telegram
+    └── push_todo_to_telegram.yaml
 ```
 
 ## 📋 Требования
 
-- Home Assistant **2025.12+** (некоторые blueprint'ы требуют 2026+)
+- Home Assistant **2025.12+**
 - Интеграция **Telegram Bot** (настроенная с известным Config Entry ID)
 - Сущности **todo** (сервисы `todo.add_item`, `todo.update_item`, `todo.remove_completed_items`, `todo.get_items`)
