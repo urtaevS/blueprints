@@ -70,6 +70,6 @@ Home assistant Scripts/
 
 <p align="center">
   <a href="https://pay.cloudtips.ru/p/0d93f1af" target="_blank" rel="noreferrer noopener">
-    <img src="https://img.shields.io/badge/☕_Чай—CloudTips-blue?style=for-the-badge" alt="Поддержать проект" />
+    <img src="https://img.shields.io/badge/☕_Кофе CloudTips-blue?style=for-the-badge" alt="Поддержать проект" />
   </a>
 </p>
