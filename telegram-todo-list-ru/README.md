@@ -2,6 +2,12 @@
 
 > Управление списком покупок/дел через Telegram-бота с inline-кнопками и reply-клавиатурой.
 
+<p align="left">
+  <a href="https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FurtaevS%2Fblueprints%2Fblob%2Fmain%2Ftelegram-todo-list-ru%2Ftelegram_todo_ru.yaml" target="_blank" rel="noreferrer noopener">
+    <img src="https://my.home-assistant.io/badges/blueprint_import.svg" alt="Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled." />
+  </a>
+</p>
+
 ## Описание
 
 Blueprint для Home Assistant, который превращает сущность `todo` в удобный Telegram-бот для списков. Пользователь добавляет пункты текстом, управляет списком кнопками — бот мгновенно обновляет сообщение через `edit_message`.

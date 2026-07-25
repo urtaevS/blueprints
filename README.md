@@ -8,10 +8,10 @@
 
 Blueprint'ы для управления списками покупок/дел через Telegram-бота.
 
-| Проект | Описание | Язык |
-|--------|----------|------|
-| [Telegram To-do List (RU)](telegram-todo-list-ru/) | Полнофункциональный blueprint с inline-кнопками, reply-клавиатурой и поддержкой скриптов синхронизации | 🇷🇺 Русский |
-| [Telegram To-do List + Scripts](telegram_to_do_list_with_scripts.yaml) | Вариант с поддержкой скриптов синхронизации (до 3 скриптов), HA 2025.12+ | 🇬🇧 English |
+| Проект | Описание | Язык | Импорт |
+|--------|----------|------|--------|
+| [Telegram To-do List (RU)](telegram-todo-list-ru/) | Полнофункциональный blueprint с inline-кнопками, reply-клавиатурой и поддержкой скриптов синхронизации | 🇷🇺 Русский | <a href="https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2FurtaevS%2Fblueprints%2Fblob%2Fmain%2Ftelegram-todo-list-ru%2Ftelegram_todo_ru.yaml" target="_blank" rel="noreferrer noopener"><img src="https://my.home-assistant.io/badges/blueprint_import.svg" alt="Open your Home Assistant instance and show the blueprint import dialog with a specific blueprint pre-filled." /></a> |
+| [Telegram To-do List + Scripts](telegram_to_do_list_with_scripts.yaml) | Вариант с поддержкой скриптов синхронизации (до 3 скриптов), HA 2025.12+ | 🇬🇧 English | |
 
 ---
 
