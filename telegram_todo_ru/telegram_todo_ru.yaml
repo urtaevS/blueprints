@@ -9,7 +9,7 @@ blueprint:
     - reopen по ☑️
     - поддержка добавления через "," и "."
     - синхронизация через скрипты (опционально)
-    - HA 2026.04+
+    - HA 2025.12+
   domain: automation
 
   input:
@@ -128,7 +128,7 @@ action:
                       keyboard:
                         - "📋 Показать список"
                         - "🗑 Очистить выполненные"
-                        - "🔄 Синхронизация"
+                        - "🗳️ Скрипты"
                       resize_keyboard: true
                       one_time_keyboard: false
               - conditions:
@@ -183,6 +183,16 @@ action:
                 {% if has_completed %}
                   {% set r.v = r.v + [[['📂 Все','/show_all']]] %}
                 {% endif %}
+                {% if sync_script_1 and sync_script_1 != '' and sync_script_2 and sync_script_2 != '' %}
+                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_1_name, '/sync_1'], ['🔹 ' ~ sync_script_2_name, '/sync_2']]] %}
+                {% elif sync_script_1 and sync_script_1 != '' %}
+                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_1_name, '/sync_1']]] %}
+                {% elif sync_script_2 and sync_script_2 != '' %}
+                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_2_name, '/sync_2']]] %}
+                {% endif %}
+                {% if sync_script_3 and sync_script_3 != '' %}
+                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_3_name, '/sync_3']]] %}
+                {% endif %}
                 {{ r.v }}
 
           - action: telegram_bot.send_message
@@ -229,6 +239,16 @@ action:
                 {% if has_completed %}
                   {% set r.v = r.v + [[['📂 Все','/show_all']]] %}
                 {% endif %}
+                {% if sync_script_1 and sync_script_1 != '' and sync_script_2 and sync_script_2 != '' %}
+                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_1_name, '/sync_1'], ['🔹 ' ~ sync_script_2_name, '/sync_2']]] %}
+                {% elif sync_script_1 and sync_script_1 != '' %}
+                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_1_name, '/sync_1']]] %}
+                {% elif sync_script_2 and sync_script_2 != '' %}
+                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_2_name, '/sync_2']]] %}
+                {% endif %}
+                {% if sync_script_3 and sync_script_3 != '' %}
+                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_3_name, '/sync_3']]] %}
+                {% endif %}
                 {{ r.v }}
 
           - action: telegram_bot.send_message
@@ -272,6 +292,16 @@ action:
                 {% for i in items %}
                   {% set r.v = r.v + [[['✅ ' ~ i.summary, '/done_' ~ i.uid]]] %}
                 {% endfor %}
+                {% if sync_script_1 and sync_script_1 != '' and sync_script_2 and sync_script_2 != '' %}
+                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_1_name, '/sync_1'], ['🔹 ' ~ sync_script_2_name, '/sync_2']]] %}
+                {% elif sync_script_1 and sync_script_1 != '' %}
+                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_1_name, '/sync_1']]] %}
+                {% elif sync_script_2 and sync_script_2 != '' %}
+                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_2_name, '/sync_2']]] %}
+                {% endif %}
+                {% if sync_script_3 and sync_script_3 != '' %}
+                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_3_name, '/sync_3']]] %}
+                {% endif %}
                 {{ r.v }}
 
           - action: telegram_bot.send_message
@@ -282,13 +312,13 @@ action:
               inline_keyboard: "{{ keyboard }}"
 
       ############################################################
-      # REPLY: 🔄 Синхронизация — показать inline-кнопки скриптов
+      # REPLY: 🗳️ Скрипты — показать inline-кнопки скриптов
       ############################################################
       - conditions:
           - condition: template
             value_template: >
               {{ trigger.event.event_type == 'telegram_text'
-                 and trigger.event.data.text == '🔄 Синхронизация' }}
+                 and trigger.event.data.text == '🗳️ Скрипты' }}
         sequence:
           - variables:
               sync_keyboard: >
@@ -324,17 +354,11 @@ action:
           - action: script.turn_on
             target:
               entity_id: "{{ sync_script_1 }}"
-          - action: telegram_bot.edit_message
-            data:
-              config_entry_id: "{{ bot_id }}"
-              chat_id: "{{ chat_id }}"
-              message_id: "{{ trigger.event.data.message.message_id }}"
-              message: "Выполнено"
           - action: telegram_bot.answer_callback_query
             data:
               config_entry_id: "{{ bot_id }}"
               callback_query_id: "{{ trigger.event.data.id }}"
-              message: "Скрипт запущен ✅"
+              message: "Выполнено ✅"
 
       ############################################################
       # CALLBACK: Запуск скрипта 2
@@ -349,17 +373,11 @@ action:
           - action: script.turn_on
             target:
               entity_id: "{{ sync_script_2 }}"
-          - action: telegram_bot.edit_message
-            data:
-              config_entry_id: "{{ bot_id }}"
-              chat_id: "{{ chat_id }}"
-              message_id: "{{ trigger.event.data.message.message_id }}"
-              message: "Выполнено"
           - action: telegram_bot.answer_callback_query
             data:
               config_entry_id: "{{ bot_id }}"
               callback_query_id: "{{ trigger.event.data.id }}"
-              message: "Скрипт запущен ✅"
+              message: "Выполнено ✅"
 
       ############################################################
       # CALLBACK: Запуск скрипта 3
@@ -374,17 +392,11 @@ action:
           - action: script.turn_on
             target:
               entity_id: "{{ sync_script_3 }}"
-          - action: telegram_bot.edit_message
-            data:
-              config_entry_id: "{{ bot_id }}"
-              chat_id: "{{ chat_id }}"
-              message_id: "{{ trigger.event.data.message.message_id }}"
-              message: "Выполнено"
           - action: telegram_bot.answer_callback_query
             data:
               config_entry_id: "{{ bot_id }}"
               callback_query_id: "{{ trigger.event.data.id }}"
-              message: "Скрипт запущен ✅"
+              message: "Выполнено ✅"
 
       ############################################################
       # Добавление пункта текстом (МУЛЬТИ + ЗАЩИТА ОТ ДУБЛЕЙ)
@@ -396,7 +408,7 @@ action:
                  and trigger.event.data.text not in [
                    '📋 Показать список',
                    '🗑 Очистить выполненные',
-                   '🔄 Синхронизация'
+                   '🗳️ Скрипты'
                  ]
                  and not (trigger.event.data.text | trim).startswith('/') }}
         sequence:
@@ -507,6 +519,16 @@ action:
                 {% if has_completed %}
                   {% set r.v = r.v + [[['📂 Все','/show_all']]] %}
                 {% endif %}
+                {% if sync_script_1 and sync_script_1 != '' and sync_script_2 and sync_script_2 != '' %}
+                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_1_name, '/sync_1'], ['🔹 ' ~ sync_script_2_name, '/sync_2']]] %}
+                {% elif sync_script_1 and sync_script_1 != '' %}
+                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_1_name, '/sync_1']]] %}
+                {% elif sync_script_2 and sync_script_2 != '' %}
+                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_2_name, '/sync_2']]] %}
+                {% endif %}
+                {% if sync_script_3 and sync_script_3 != '' %}
+                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_3_name, '/sync_3']]] %}
+                {% endif %}
                 {{ r.v }}
 
           - action: telegram_bot.send_message
@@ -602,6 +624,16 @@ action:
                     {% set r.v = r.v + [[['🛒 Активные','/show_active']]] %}
                   {% endif %}
                   {% set r.v = r.v + [[['🗑 Очистить','/clear_completed']]] %}
+                {% endif %}
+                {% if sync_script_1 and sync_script_1 != '' and sync_script_2 and sync_script_2 != '' %}
+                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_1_name, '/sync_1'], ['🔹 ' ~ sync_script_2_name, '/sync_2']]] %}
+                {% elif sync_script_1 and sync_script_1 != '' %}
+                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_1_name, '/sync_1']]] %}
+                {% elif sync_script_2 and sync_script_2 != '' %}
+                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_2_name, '/sync_2']]] %}
+                {% endif %}
+                {% if sync_script_3 and sync_script_3 != '' %}
+                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_3_name, '/sync_3']]] %}
                 {% endif %}
                 {{ r.v }}
 
