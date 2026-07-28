@@ -50,9 +50,11 @@ Home assistant Scripts/
 │   └── telegram_todo_ru.yaml             #    Blueprint
 ├── telegram_to_do_list_with_scripts.yaml # 🇬🇧 Telegram To-do + Scripts
 ├── Sync lists/                           # Ручная синхронизация списков
-│   └── sync_lists_manual.yaml
+│   ├── README.md                         #    Описание скриптов
+│   └── sync_lists_manual.yaml            #    Script blueprint
 └── automations/                          # Push-уведомления в Telegram
-    └── push_todo_to_telegram.yaml
+    ├── README.md                         #    Описание автоматизаций
+    └── push_todo_to_telegram.yaml        #    Automation
 ```
 
 ## 📋 Требования
