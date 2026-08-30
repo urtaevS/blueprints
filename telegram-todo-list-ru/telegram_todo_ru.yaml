@@ -9,6 +9,7 @@ blueprint:
     - reopen по ☑️
     - поддержка добавления через "," и "."
     - синхронизация через скрипты (опционально)
+    - режим редактирования списка через ✨
     - HA 2025.12+
   domain: automation
 
@@ -47,7 +48,7 @@ blueprint:
       selector:
         text: {}
       default: "Скрипт 2"
-      
+
     sync_script_2:
       name: Скрипт синхронизации 2 (опционально)
       selector:
@@ -60,7 +61,7 @@ blueprint:
       selector:
         text: {}
       default: "Скрипт 3"
-      
+
     sync_script_3:
       name: Скрипт синхронизации 3 (опционально)
       selector:
@@ -75,22 +76,28 @@ variables:
   todo_entity: !input todo_entity
   chat_id: !input telegram_chat_id
   bot_id: !input bot_config_entry_id
+
   sync_script_1: !input sync_script_1
   sync_script_2: !input sync_script_2
   sync_script_3: !input sync_script_3
+
   sync_script_1_name: !input sync_script_1_name
   sync_script_2_name: !input sync_script_2_name
   sync_script_3_name: !input sync_script_3_name
 
 trigger:
+
   - platform: event
     event_type: telegram_command
+
   - platform: event
     event_type: telegram_text
+
   - platform: event
     event_type: telegram_callback
 
 condition:
+
   - condition: template
     value_template: >
       {{
@@ -100,6 +107,7 @@ condition:
       }}
 
 action:
+
   - choose:
 
       ############################################################
@@ -108,18 +116,27 @@ action:
       - conditions:
           - condition: template
             value_template: >
-              {{ trigger.event.event_type == 'telegram_command'
-                 and trigger.event.data.command == '/start' }}
+              {{
+                trigger.event.event_type == 'telegram_command'
+                and trigger.event.data.command == '/start'
+              }}
         sequence:
+
           - variables:
               has_scripts: >
-                {{ sync_script_1 != '' or sync_script_2 != '' or sync_script_3 != '' }}
+                {{
+                  sync_script_1 != ''
+                  or sync_script_2 != ''
+                  or sync_script_3 != ''
+                }}
 
           - choose:
+
               - conditions:
                   - condition: template
                     value_template: "{{ has_scripts }}"
                 sequence:
+
                   - action: telegram_bot.send_message
                     data:
                       config_entry_id: "{{ bot_id }}"
@@ -127,14 +144,17 @@ action:
                       message: "Используй кнопки внизу ⬇️"
                       keyboard:
                         - "📋 Показать список"
+                        - "✏️ Редактировать"
                         - "🗑 Очистить выполненные"
                         - "🗳️ Скрипты"
                       resize_keyboard: true
                       one_time_keyboard: false
+
               - conditions:
                   - condition: template
                     value_template: "{{ not has_scripts }}"
                 sequence:
+
                   - action: telegram_bot.send_message
                     data:
                       config_entry_id: "{{ bot_id }}"
@@ -142,19 +162,23 @@ action:
                       message: "Используй кнопки внизу ⬇️"
                       keyboard:
                         - "📋 Показать список"
+                        - "✏️ Редактировать"
                         - "🗑 Очистить выполненные"
                       resize_keyboard: true
                       one_time_keyboard: false
 
       ############################################################
-      # /list — показать активные (аналогично кнопке "📋 Показать список")
+      # /list — показать активные
       ############################################################
       - conditions:
           - condition: template
             value_template: >
-              {{ trigger.event.event_type == 'telegram_command'
-                 and trigger.event.data.command == '/list' }}
+              {{
+                trigger.event.event_type == 'telegram_command'
+                and trigger.event.data.command == '/list'
+              }}
         sequence:
+
           - action: todo.get_items
             target:
               entity_id: "{{ todo_entity }}"
@@ -162,37 +186,63 @@ action:
 
           - variables:
               items: >
-                {{ todo_resp[todo_entity]['items']
-                   | selectattr('status','eq','needs_action')
-                   | list }}
+                {{
+                  todo_resp[todo_entity]['items']
+                  | selectattr('status', 'eq', 'needs_action')
+                  | list
+                }}
+
               has_completed: >
-                {{ todo_resp[todo_entity]['items']
-                   | selectattr('status','eq','completed')
-                   | list | length > 0 }}
+                {{
+                  todo_resp[todo_entity]['items']
+                  | selectattr('status', 'eq', 'completed')
+                  | list
+                  | length > 0
+                }}
+
               text: >
                 {% if items | length == 0 %}
                   🛒 Список покупок пуст 🤷‍♂️
                 {% else %}
                   🛒 Список покупок:
                 {% endif %}
+
               keyboard: >
                 {% set r = namespace(v=[]) %}
+
                 {% for i in items %}
-                  {% set r.v = r.v + [[['✅ ' ~ i.summary, '/done_' ~ i.uid]]] %}
+                  {% set r.v = r.v + [[
+                    ['✅ ' ~ i.summary, '/done_' ~ i.uid]
+                  ]] %}
                 {% endfor %}
+
                 {% if has_completed %}
-                  {% set r.v = r.v + [[['📂 Все','/show_all']]] %}
+                  {% set r.v = r.v + [[
+                    ['📂 Все', '/show_all']
+                  ]] %}
                 {% endif %}
+
                 {% if sync_script_1 and sync_script_1 != '' and sync_script_2 and sync_script_2 != '' %}
-                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_1_name, '/sync_1'], ['🔹 ' ~ sync_script_2_name, '/sync_2']]] %}
+                  {% set r.v = r.v + [[
+                    ['🔹 ' ~ sync_script_1_name, '/sync_1'],
+                    ['🔹 ' ~ sync_script_2_name, '/sync_2']
+                  ]] %}
                 {% elif sync_script_1 and sync_script_1 != '' %}
-                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_1_name, '/sync_1']]] %}
+                  {% set r.v = r.v + [[
+                    ['🔹 ' ~ sync_script_1_name, '/sync_1']
+                  ]] %}
                 {% elif sync_script_2 and sync_script_2 != '' %}
-                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_2_name, '/sync_2']]] %}
+                  {% set r.v = r.v + [[
+                    ['🔹 ' ~ sync_script_2_name, '/sync_2']
+                  ]] %}
                 {% endif %}
+
                 {% if sync_script_3 and sync_script_3 != '' %}
-                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_3_name, '/sync_3']]] %}
+                  {% set r.v = r.v + [[
+                    ['🔹 ' ~ sync_script_3_name, '/sync_3']
+                  ]] %}
                 {% endif %}
+
                 {{ r.v }}
 
           - action: telegram_bot.send_message
@@ -208,9 +258,12 @@ action:
       - conditions:
           - condition: template
             value_template: >
-              {{ trigger.event.event_type == 'telegram_text'
-                 and trigger.event.data.text == '📋 Показать список' }}
+              {{
+                trigger.event.event_type == 'telegram_text'
+                and trigger.event.data.text == '📋 Показать список'
+              }}
         sequence:
+
           - action: todo.get_items
             target:
               entity_id: "{{ todo_entity }}"
@@ -218,37 +271,63 @@ action:
 
           - variables:
               items: >
-                {{ todo_resp[todo_entity]['items']
-                   | selectattr('status','eq','needs_action')
-                   | list }}
+                {{
+                  todo_resp[todo_entity]['items']
+                  | selectattr('status', 'eq', 'needs_action')
+                  | list
+                }}
+
               has_completed: >
-                {{ todo_resp[todo_entity]['items']
-                   | selectattr('status','eq','completed')
-                   | list | length > 0 }}
+                {{
+                  todo_resp[todo_entity]['items']
+                  | selectattr('status', 'eq', 'completed')
+                  | list
+                  | length > 0
+                }}
+
               text: >
                 {% if items | length == 0 %}
                   🛒 Список покупок пуст 🤷‍♂️
                 {% else %}
                   🛒 Список покупок:
                 {% endif %}
+
               keyboard: >
                 {% set r = namespace(v=[]) %}
+
                 {% for i in items %}
-                  {% set r.v = r.v + [[['✅ ' ~ i.summary, '/done_' ~ i.uid]]] %}
+                  {% set r.v = r.v + [[
+                    ['✅ ' ~ i.summary, '/done_' ~ i.uid]
+                  ]] %}
                 {% endfor %}
+
                 {% if has_completed %}
-                  {% set r.v = r.v + [[['📂 Все','/show_all']]] %}
+                  {% set r.v = r.v + [[
+                    ['📂 Все', '/show_all']
+                  ]] %}
                 {% endif %}
+
                 {% if sync_script_1 and sync_script_1 != '' and sync_script_2 and sync_script_2 != '' %}
-                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_1_name, '/sync_1'], ['🔹 ' ~ sync_script_2_name, '/sync_2']]] %}
+                  {% set r.v = r.v + [[
+                    ['🔹 ' ~ sync_script_1_name, '/sync_1'],
+                    ['🔹 ' ~ sync_script_2_name, '/sync_2']
+                  ]] %}
                 {% elif sync_script_1 and sync_script_1 != '' %}
-                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_1_name, '/sync_1']]] %}
+                  {% set r.v = r.v + [[
+                    ['🔹 ' ~ sync_script_1_name, '/sync_1']
+                  ]] %}
                 {% elif sync_script_2 and sync_script_2 != '' %}
-                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_2_name, '/sync_2']]] %}
+                  {% set r.v = r.v + [[
+                    ['🔹 ' ~ sync_script_2_name, '/sync_2']
+                  ]] %}
                 {% endif %}
+
                 {% if sync_script_3 and sync_script_3 != '' %}
-                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_3_name, '/sync_3']]] %}
+                  {% set r.v = r.v + [[
+                    ['🔹 ' ~ sync_script_3_name, '/sync_3']
+                  ]] %}
                 {% endif %}
+
                 {{ r.v }}
 
           - action: telegram_bot.send_message
@@ -259,14 +338,72 @@ action:
               inline_keyboard: "{{ keyboard }}"
 
       ############################################################
+      # REPLY: ✏️ Редактировать
+      #
+      # Открывает отдельный режим:
+      #
+      # [❕ молоко]
+      # [❕ хлеб]
+      # [❕ чай]
+      #
+      # [✍️ Закончить]
+      ############################################################
+      - conditions:
+          - condition: template
+            value_template: >
+              {{
+                trigger.event.event_type == 'telegram_text'
+                and trigger.event.data.text == '✏️ Редактировать'
+              }}
+        sequence:
+
+          - action: todo.get_items
+            target:
+              entity_id: "{{ todo_entity }}"
+            response_variable: edit_resp
+
+          - variables:
+              edit_items: >
+                {{
+                  edit_resp[todo_entity]['items']
+                  | selectattr('status', 'eq', 'needs_action')
+                  | list
+                }}
+
+              edit_keyboard: >
+                {% set r = namespace(v=[]) %}
+
+                {% for i in edit_items %}
+                  {% set r.v = r.v + [[
+                    ['❕ ' ~ i.summary, '/edit_' ~ i.uid]
+                  ]] %}
+                {% endfor %}
+
+                {% set r.v = r.v + [[
+                  ['✍️ Закончить', '/edit_finish']
+                ]] %}
+
+                {{ r.v }}
+
+          - action: telegram_bot.send_message
+            data:
+              config_entry_id: "{{ bot_id }}"
+              chat_id: "{{ chat_id }}"
+              message: "✏️ Редактирование списка"
+              inline_keyboard: "{{ edit_keyboard }}"
+
+      ############################################################
       # REPLY: 🗑 Очистить выполненные
       ############################################################
       - conditions:
           - condition: template
             value_template: >
-              {{ trigger.event.event_type == 'telegram_text'
-                 and trigger.event.data.text == '🗑 Очистить выполненные' }}
+              {{
+                trigger.event.event_type == 'telegram_text'
+                and trigger.event.data.text == '🗑 Очистить выполненные'
+              }}
         sequence:
+
           - action: todo.remove_completed_items
             target:
               entity_id: "{{ todo_entity }}"
@@ -278,30 +415,49 @@ action:
 
           - variables:
               items: >
-                {{ todo_resp[todo_entity]['items']
-                   | selectattr('status','eq','needs_action')
-                   | list }}
+                {{
+                  todo_resp[todo_entity]['items']
+                  | selectattr('status', 'eq', 'needs_action')
+                  | list
+                }}
+
               text: >
                 {% if items | length == 0 %}
                   🛒 Список покупок пуст 🤷‍♂️
                 {% else %}
                   🛒 Список покупок:
                 {% endif %}
+
               keyboard: >
                 {% set r = namespace(v=[]) %}
+
                 {% for i in items %}
-                  {% set r.v = r.v + [[['✅ ' ~ i.summary, '/done_' ~ i.uid]]] %}
+                  {% set r.v = r.v + [[
+                    ['✅ ' ~ i.summary, '/done_' ~ i.uid]
+                  ]] %}
                 {% endfor %}
+
                 {% if sync_script_1 and sync_script_1 != '' and sync_script_2 and sync_script_2 != '' %}
-                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_1_name, '/sync_1'], ['🔹 ' ~ sync_script_2_name, '/sync_2']]] %}
+                  {% set r.v = r.v + [[
+                    ['🔹 ' ~ sync_script_1_name, '/sync_1'],
+                    ['🔹 ' ~ sync_script_2_name, '/sync_2']
+                  ]] %}
                 {% elif sync_script_1 and sync_script_1 != '' %}
-                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_1_name, '/sync_1']]] %}
+                  {% set r.v = r.v + [[
+                    ['🔹 ' ~ sync_script_1_name, '/sync_1']
+                  ]] %}
                 {% elif sync_script_2 and sync_script_2 != '' %}
-                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_2_name, '/sync_2']]] %}
+                  {% set r.v = r.v + [[
+                    ['🔹 ' ~ sync_script_2_name, '/sync_2']
+                  ]] %}
                 {% endif %}
+
                 {% if sync_script_3 and sync_script_3 != '' %}
-                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_3_name, '/sync_3']]] %}
+                  {% set r.v = r.v + [[
+                    ['🔹 ' ~ sync_script_3_name, '/sync_3']
+                  ]] %}
                 {% endif %}
+
                 {{ r.v }}
 
           - action: telegram_bot.send_message
@@ -312,26 +468,39 @@ action:
               inline_keyboard: "{{ keyboard }}"
 
       ############################################################
-      # REPLY: 🗳️ Скрипты — показать inline-кнопки скриптов
+      # REPLY: 🗳️ Скрипты
       ############################################################
       - conditions:
           - condition: template
             value_template: >
-              {{ trigger.event.event_type == 'telegram_text'
-                 and trigger.event.data.text == '🗳️ Скрипты' }}
+              {{
+                trigger.event.event_type == 'telegram_text'
+                and trigger.event.data.text == '🗳️ Скрипты'
+              }}
         sequence:
+
           - variables:
               sync_keyboard: >
                 {% set scripts = [] %}
+
                 {% if sync_script_1 and sync_script_1 != '' %}
-                  {% set scripts = scripts + [[['🔹 ' ~ sync_script_1_name, '/sync_1']]] %}
+                  {% set scripts = scripts + [[
+                    ['🔹 ' ~ sync_script_1_name, '/sync_1']
+                  ]] %}
                 {% endif %}
+
                 {% if sync_script_2 and sync_script_2 != '' %}
-                  {% set scripts = scripts + [[['🔹 ' ~ sync_script_2_name, '/sync_2']]] %}
+                  {% set scripts = scripts + [[
+                    ['🔹 ' ~ sync_script_2_name, '/sync_2']
+                  ]] %}
                 {% endif %}
+
                 {% if sync_script_3 and sync_script_3 != '' %}
-                  {% set scripts = scripts + [[['🔹 ' ~ sync_script_3_name, '/sync_3']]] %}
+                  {% set scripts = scripts + [[
+                    ['🔹 ' ~ sync_script_3_name, '/sync_3']
+                  ]] %}
                 {% endif %}
+
                 {{ scripts }}
 
           - action: telegram_bot.send_message
@@ -347,13 +516,17 @@ action:
       - conditions:
           - condition: template
             value_template: >
-              {{ trigger.event.event_type == 'telegram_callback'
-                 and trigger.event.data.data == '/sync_1'
-                 and sync_script_1 != '' }}
+              {{
+                trigger.event.event_type == 'telegram_callback'
+                and trigger.event.data.data == '/sync_1'
+                and sync_script_1 != ''
+              }}
         sequence:
+
           - action: script.turn_on
             target:
               entity_id: "{{ sync_script_1 }}"
+
           - action: telegram_bot.answer_callback_query
             data:
               config_entry_id: "{{ bot_id }}"
@@ -366,13 +539,17 @@ action:
       - conditions:
           - condition: template
             value_template: >
-              {{ trigger.event.event_type == 'telegram_callback'
-                 and trigger.event.data.data == '/sync_2'
-                 and sync_script_2 != '' }}
+              {{
+                trigger.event.event_type == 'telegram_callback'
+                and trigger.event.data.data == '/sync_2'
+                and sync_script_2 != ''
+              }}
         sequence:
+
           - action: script.turn_on
             target:
               entity_id: "{{ sync_script_2 }}"
+
           - action: telegram_bot.answer_callback_query
             data:
               config_entry_id: "{{ bot_id }}"
@@ -385,13 +562,17 @@ action:
       - conditions:
           - condition: template
             value_template: >
-              {{ trigger.event.event_type == 'telegram_callback'
-                 and trigger.event.data.data == '/sync_3'
-                 and sync_script_3 != '' }}
+              {{
+                trigger.event.event_type == 'telegram_callback'
+                and trigger.event.data.data == '/sync_3'
+                and sync_script_3 != ''
+              }}
         sequence:
+
           - action: script.turn_on
             target:
               entity_id: "{{ sync_script_3 }}"
+
           - action: telegram_bot.answer_callback_query
             data:
               config_entry_id: "{{ bot_id }}"
@@ -399,24 +580,35 @@ action:
               message: "Выполнено ✅"
 
       ############################################################
-      # Добавление пункта текстом (МУЛЬТИ + ЗАЩИТА ОТ ДУБЛЕЙ)
+      # Добавление пункта текстом
+      # МУЛЬТИ + ЗАЩИТА ОТ ДУБЛЕЙ
       ############################################################
       - conditions:
           - condition: template
             value_template: >
-              {{ trigger.event.event_type == 'telegram_text'
-                 and trigger.event.data.text not in [
-                   '📋 Показать список',
-                   '🗑 Очистить выполненные',
-                   '🗳️ Скрипты'
-                 ]
-                 and not (trigger.event.data.text | trim).startswith('/') }}
+              {{
+                trigger.event.event_type == 'telegram_text'
+                and trigger.event.data.text not in [
+                  '📋 Показать список',
+                  '✏️ Редактировать',
+                  '🗑 Очистить выполненные',
+                  '🗳️ Скрипты'
+                ]
+                and not (trigger.event.data.text | trim).startswith('/')
+              }}
         sequence:
+
           - variables:
               raw_text: "{{ trigger.event.data.text }}"
+
               candidates: >
                 {% set parts = raw_text.replace('.', ',').split(',') %}
-                {{ parts | map('trim') | reject('equalto','') | list }}
+                {{
+                  parts
+                  | map('trim')
+                  | reject('equalto', '')
+                  | list
+                }}
 
           - action: todo.get_items
             target:
@@ -426,39 +618,52 @@ action:
           - repeat:
               for_each: "{{ candidates }}"
               sequence:
+
                 - variables:
                     raw: "{{ repeat.item }}"
-                    new_item: "{{ repeat.item | lower | replace(' ','') }}"
 
-                - variables:
+                    new_item: >
+                      {{ repeat.item | lower | replace(' ', '') }}
+
                     active_items: >
-                      {{ current[todo_entity]['items']
-                         | selectattr('status','eq','needs_action')
-                         | list }}
+                      {{
+                        current[todo_entity]['items']
+                        | selectattr('status', 'eq', 'needs_action')
+                        | list
+                      }}
+
                     completed_items: >
-                      {{ current[todo_entity]['items']
-                         | selectattr('status','eq','completed')
-                         | list }}
+                      {{
+                        current[todo_entity]['items']
+                        | selectattr('status', 'eq', 'completed')
+                        | list
+                      }}
 
                     active_norm: >
-                      {{ active_items
-                         | map(attribute='summary')
-                         | map('lower')
-                         | map('replace',' ','')
-                         | list }}
+                      {{
+                        active_items
+                        | map(attribute='summary')
+                        | map('lower')
+                        | map('replace', ' ', '')
+                        | list
+                      }}
 
                     completed_norm: >
-                      {{ completed_items
-                         | map(attribute='summary')
-                         | map('lower')
-                         | map('replace',' ','')
-                         | list }}
+                      {{
+                        completed_items
+                        | map(attribute='summary')
+                        | map('lower')
+                        | map('replace', ' ', '')
+                        | list
+                      }}
 
                 - choose:
+
                     - conditions:
                         - condition: template
                           value_template: "{{ new_item in active_norm }}"
                       sequence:
+
                         - action: telegram_bot.send_message
                           data:
                             config_entry_id: "{{ bot_id }}"
@@ -469,9 +674,11 @@ action:
                         - condition: template
                           value_template: "{{ new_item in completed_norm }}"
                       sequence:
+
                         - variables:
                             idx: "{{ completed_norm.index(new_item) }}"
                             uid: "{{ completed_items[idx].uid }}"
+
                         - action: todo.update_item
                           target:
                             entity_id: "{{ todo_entity }}"
@@ -482,9 +689,12 @@ action:
                     - conditions:
                         - condition: template
                           value_template: >
-                            {{ new_item not in active_norm
-                               and new_item not in completed_norm }}
+                            {{
+                              new_item not in active_norm
+                              and new_item not in completed_norm
+                            }}
                       sequence:
+
                         - action: todo.add_item
                           target:
                             entity_id: "{{ todo_entity }}"
@@ -498,37 +708,63 @@ action:
 
           - variables:
               items: >
-                {{ todo_resp[todo_entity]['items']
-                   | selectattr('status','eq','needs_action')
-                   | list }}
+                {{
+                  todo_resp[todo_entity]['items']
+                  | selectattr('status', 'eq', 'needs_action')
+                  | list
+                }}
+
               has_completed: >
-                {{ todo_resp[todo_entity]['items']
-                   | selectattr('status','eq','completed')
-                   | list | length > 0 }}
+                {{
+                  todo_resp[todo_entity]['items']
+                  | selectattr('status', 'eq', 'completed')
+                  | list
+                  | length > 0
+                }}
+
               text: >
                 {% if items | length == 0 %}
                   🛒 Список покупок пуст 🤷‍♂️
                 {% else %}
                   🛒 Список покупок:
                 {% endif %}
+
               keyboard: >
                 {% set r = namespace(v=[]) %}
+
                 {% for i in items %}
-                  {% set r.v = r.v + [[['✅ ' ~ i.summary, '/done_' ~ i.uid]]] %}
+                  {% set r.v = r.v + [[
+                    ['✅ ' ~ i.summary, '/done_' ~ i.uid]
+                  ]] %}
                 {% endfor %}
+
                 {% if has_completed %}
-                  {% set r.v = r.v + [[['📂 Все','/show_all']]] %}
+                  {% set r.v = r.v + [[
+                    ['📂 Все', '/show_all']
+                  ]] %}
                 {% endif %}
+
                 {% if sync_script_1 and sync_script_1 != '' and sync_script_2 and sync_script_2 != '' %}
-                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_1_name, '/sync_1'], ['🔹 ' ~ sync_script_2_name, '/sync_2']]] %}
+                  {% set r.v = r.v + [[
+                    ['🔹 ' ~ sync_script_1_name, '/sync_1'],
+                    ['🔹 ' ~ sync_script_2_name, '/sync_2']
+                  ]] %}
                 {% elif sync_script_1 and sync_script_1 != '' %}
-                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_1_name, '/sync_1']]] %}
+                  {% set r.v = r.v + [[
+                    ['🔹 ' ~ sync_script_1_name, '/sync_1']
+                  ]] %}
                 {% elif sync_script_2 and sync_script_2 != '' %}
-                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_2_name, '/sync_2']]] %}
+                  {% set r.v = r.v + [[
+                    ['🔹 ' ~ sync_script_2_name, '/sync_2']
+                  ]] %}
                 {% endif %}
+
                 {% if sync_script_3 and sync_script_3 != '' %}
-                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_3_name, '/sync_3']]] %}
+                  {% set r.v = r.v + [[
+                    ['🔹 ' ~ sync_script_3_name, '/sync_3']
+                  ]] %}
                 {% endif %}
+
                 {{ r.v }}
 
           - action: telegram_bot.send_message
@@ -539,14 +775,308 @@ action:
               inline_keyboard: "{{ keyboard }}"
 
       ############################################################
-      # Inline-кнопки — UI (edit_message) — ОБЫЧНЫЕ CALLBACK
+      # CALLBACK: Режим редактирования — переключение ✨
+      #
+      # Если ✨ нет:
+      #   молоко -> молоко✨
+      #
+      # Если ✨ уже есть:
+      #   молоко✨ -> молоко
+      #
+      # Используется тот же UID todo item.
+      # Никаких helper не требуется.
       ############################################################
       - conditions:
           - condition: template
             value_template: >
-              {{ trigger.event.event_type == 'telegram_callback'
-                 and not trigger.event.data.data.startswith('/sync_') }}
+              {{
+                trigger.event.event_type == 'telegram_callback'
+                and trigger.event.data.data.startswith('/edit_')
+                and trigger.event.data.data != '/edit_finish'
+              }}
         sequence:
+
+          - variables:
+              msg_id: "{{ trigger.event.data.message.message_id }}"
+              item_uid: "{{ trigger.event.data.data.split('_', 1)[1] }}"
+
+          - action: todo.get_items
+            target:
+              entity_id: "{{ todo_entity }}"
+            response_variable: edit_resp
+
+          - variables:
+              edit_all_items: >
+                {{ edit_resp[todo_entity]['items'] | default([]) }}
+
+              edit_item: >
+                {{
+                  edit_all_items
+                  | selectattr('uid', 'eq', item_uid)
+                  | list
+                  | first
+                  | default({})
+                }}
+
+          - choose:
+
+              ####################################################
+              # Пункт найден и ✨ ещё нет — добавляем ✨
+              ####################################################
+              - conditions:
+                  - condition: template
+                    value_template: >
+                      {{
+                        edit_item != {}
+                        and not edit_item.summary.endswith('✨')
+                      }}
+                sequence:
+
+                  - action: todo.update_item
+                    target:
+                      entity_id: "{{ todo_entity }}"
+                    data:
+                      item: "{{ item_uid }}"
+                      rename: "{{ edit_item.summary }}✨"
+
+                  - action: todo.get_items
+                    target:
+                      entity_id: "{{ todo_entity }}"
+                    response_variable: edit_resp_after
+
+                  - variables:
+                      edit_items_after: >
+                        {{
+                          edit_resp_after[todo_entity]['items']
+                          | selectattr('status', 'eq', 'needs_action')
+                          | list
+                        }}
+
+                      edit_keyboard_after: >
+                        {% set r = namespace(v=[]) %}
+
+                        {% for i in edit_items_after %}
+                          {% set r.v = r.v + [[
+                            ['❕ ' ~ i.summary, '/edit_' ~ i.uid]
+                          ]] %}
+                        {% endfor %}
+
+                        {% set r.v = r.v + [[
+                          ['✍️ Закончить', '/edit_finish']
+                        ]] %}
+
+                        {{ r.v }}
+
+                  - action: telegram_bot.edit_message
+                    data:
+                      config_entry_id: "{{ bot_id }}"
+                      chat_id: "{{ chat_id }}"
+                      message_id: "{{ msg_id }}"
+                      message: "✏️ Редактирование списка"
+                      inline_keyboard: "{{ edit_keyboard_after }}"
+
+                  - action: telegram_bot.answer_callback_query
+                    data:
+                      config_entry_id: "{{ bot_id }}"
+                      callback_query_id: "{{ trigger.event.data.id }}"
+                      message: "Добавлено ✨"
+
+              ####################################################
+              # Пункт уже имеет ✨ — убираем последний символ
+              #
+              # Важно:
+              # здесь НЕ используется regex_replace.
+              # summary[:-1] удаляет последний символ строки,
+              # которым в этой ветке гарантированно является ✨.
+              ####################################################
+              - conditions:
+                  - condition: template
+                    value_template: >
+                      {{
+                        edit_item != {}
+                        and edit_item.summary.endswith('✨')
+                      }}
+                sequence:
+
+                  - action: todo.update_item
+                    target:
+                      entity_id: "{{ todo_entity }}"
+                    data:
+                      item: "{{ item_uid }}"
+                      rename: "{{ edit_item.summary[:-1] | trim }}"
+
+                  - action: todo.get_items
+                    target:
+                      entity_id: "{{ todo_entity }}"
+                    response_variable: edit_resp_after
+
+                  - variables:
+                      edit_items_after: >
+                        {{
+                          edit_resp_after[todo_entity]['items']
+                          | selectattr('status', 'eq', 'needs_action')
+                          | list
+                        }}
+
+                      edit_keyboard_after: >
+                        {% set r = namespace(v=[]) %}
+
+                        {% for i in edit_items_after %}
+                          {% set r.v = r.v + [[
+                            ['❕ ' ~ i.summary, '/edit_' ~ i.uid]
+                          ]] %}
+                        {% endfor %}
+
+                        {% set r.v = r.v + [[
+                          ['✍️ Закончить', '/edit_finish']
+                        ]] %}
+
+                        {{ r.v }}
+
+                  - action: telegram_bot.edit_message
+                    data:
+                      config_entry_id: "{{ bot_id }}"
+                      chat_id: "{{ chat_id }}"
+                      message_id: "{{ msg_id }}"
+                      message: "✏️ Редактирование списка"
+                      inline_keyboard: "{{ edit_keyboard_after }}"
+
+                  - action: telegram_bot.answer_callback_query
+                    data:
+                      config_entry_id: "{{ bot_id }}"
+                      callback_query_id: "{{ trigger.event.data.id }}"
+                      message: "Убрано ✨"
+
+              ####################################################
+              # Пункт больше не существует
+              ####################################################
+              - conditions:
+                  - condition: template
+                    value_template: "{{ edit_item == {} }}"
+                sequence:
+
+                  - action: telegram_bot.answer_callback_query
+                    data:
+                      config_entry_id: "{{ bot_id }}"
+                      callback_query_id: "{{ trigger.event.data.id }}"
+                      message: "Пункт уже отсутствует"
+
+      ############################################################
+      # CALLBACK: ✍️ Закончить редактирование
+      #
+      # Возвращаем обычный список.
+      ############################################################
+      - conditions:
+          - condition: template
+            value_template: >
+              {{
+                trigger.event.event_type == 'telegram_callback'
+                and trigger.event.data.data == '/edit_finish'
+              }}
+        sequence:
+
+          - variables:
+              msg_id: "{{ trigger.event.data.message.message_id }}"
+
+          - action: todo.get_items
+            target:
+              entity_id: "{{ todo_entity }}"
+            response_variable: finish_resp
+
+          - variables:
+              finish_items: >
+                {{
+                  finish_resp[todo_entity]['items']
+                  | selectattr('status', 'eq', 'needs_action')
+                  | list
+                }}
+
+              finish_has_completed: >
+                {{
+                  finish_resp[todo_entity]['items']
+                  | selectattr('status', 'eq', 'completed')
+                  | list
+                  | length > 0
+                }}
+
+              finish_text: >
+                {% if finish_items | length == 0 %}
+                  🛒 Список покупок пуст 🤷‍♂️
+                {% else %}
+                  🛒 Список покупок:
+                {% endif %}
+
+              finish_keyboard: >
+                {% set r = namespace(v=[]) %}
+
+                {% for i in finish_items %}
+                  {% set r.v = r.v + [[
+                    ['✅ ' ~ i.summary, '/done_' ~ i.uid]
+                  ]] %}
+                {% endfor %}
+
+                {% if finish_has_completed %}
+                  {% set r.v = r.v + [[
+                    ['📂 Все', '/show_all']
+                  ]] %}
+                {% endif %}
+
+                {% if sync_script_1 and sync_script_1 != '' and sync_script_2 and sync_script_2 != '' %}
+                  {% set r.v = r.v + [[
+                    ['🔹 ' ~ sync_script_1_name, '/sync_1'],
+                    ['🔹 ' ~ sync_script_2_name, '/sync_2']
+                  ]] %}
+                {% elif sync_script_1 and sync_script_1 != '' %}
+                  {% set r.v = r.v + [[
+                    ['🔹 ' ~ sync_script_1_name, '/sync_1']
+                  ]] %}
+                {% elif sync_script_2 and sync_script_2 != '' %}
+                  {% set r.v = r.v + [[
+                    ['🔹 ' ~ sync_script_2_name, '/sync_2']
+                  ]] %}
+                {% endif %}
+
+                {% if sync_script_3 and sync_script_3 != '' %}
+                  {% set r.v = r.v + [[
+                    ['🔹 ' ~ sync_script_3_name, '/sync_3']
+                  ]] %}
+                {% endif %}
+
+                {{ r.v }}
+
+          - action: telegram_bot.edit_message
+            data:
+              config_entry_id: "{{ bot_id }}"
+              chat_id: "{{ chat_id }}"
+              message_id: "{{ msg_id }}"
+              message: "{{ finish_text }}"
+              inline_keyboard: "{{ finish_keyboard }}"
+
+          - action: telegram_bot.answer_callback_query
+            data:
+              config_entry_id: "{{ bot_id }}"
+              callback_query_id: "{{ trigger.event.data.id }}"
+              message: "Редактирование завершено"
+
+      ############################################################
+      # CALLBACK: Обычные inline-кнопки
+      #
+      # /done_UID
+      # /reopen_UID
+      # /show_all
+      # /show_active
+      # /clear_completed
+      ############################################################
+      - conditions:
+          - condition: template
+            value_template: >
+              {{
+                trigger.event.event_type == 'telegram_callback'
+                and not trigger.event.data.data.startswith('/sync_')
+                and not trigger.event.data.data.startswith('/edit_')
+              }}
+        sequence:
+
           - variables:
               cb: "{{ trigger.event.data.data }}"
               msg_id: "{{ trigger.event.data.message.message_id }}"
@@ -555,28 +1085,31 @@ action:
               - condition: template
                 value_template: "{{ cb.startswith('/done_') }}"
             then:
+
               - action: todo.update_item
                 target:
                   entity_id: "{{ todo_entity }}"
                 data:
-                  item: "{{ cb.split('_',1)[1] }}"
+                  item: "{{ cb.split('_', 1)[1] }}"
                   status: completed
 
           - if:
               - condition: template
                 value_template: "{{ cb.startswith('/reopen_') }}"
             then:
+
               - action: todo.update_item
                 target:
                   entity_id: "{{ todo_entity }}"
                 data:
-                  item: "{{ cb.split('_',1)[1] }}"
+                  item: "{{ cb.split('_', 1)[1] }}"
                   status: needs_action
 
           - if:
               - condition: template
                 value_template: "{{ cb == '/clear_completed' }}"
             then:
+
               - action: todo.remove_completed_items
                 target:
                   entity_id: "{{ todo_entity }}"
@@ -587,54 +1120,103 @@ action:
             response_variable: todo_resp
 
           - variables:
-              items_all: "{{ todo_resp[todo_entity]['items'] | default([]) }}"
+              items_all: >
+                {{
+                  todo_resp[todo_entity]['items']
+                  | default([])
+                }}
+
               has_completed: >
-                {{ items_all
-                   | selectattr('status','eq','completed')
-                   | list | length > 0 }}
+                {{
+                  items_all
+                  | selectattr('status', 'eq', 'completed')
+                  | list
+                  | length > 0
+                }}
+
               mode: >
-                {% if cb == '/show_all' %}all{% elif cb == '/show_active' %}active{% else %}active{% endif %}
+                {% if cb == '/show_all' %}
+                  all
+                {% elif cb == '/show_active' %}
+                  active
+                {% else %}
+                  active
+                {% endif %}
+
               items: >
                 {% if mode == 'all' %}
                   {{ items_all }}
                 {% else %}
-                  {{ items_all
-                     | selectattr('status','eq','needs_action')
-                     | list }}
+                  {{
+                    items_all
+                    | selectattr('status', 'eq', 'needs_action')
+                    | list
+                  }}
                 {% endif %}
+
               text: >
                 {% if items | length == 0 %}
                   🛒 Список покупок пуст 🤷‍♂️
                 {% else %}
                   🛒 Список покупок:
                 {% endif %}
+
               keyboard: >
                 {% set r = namespace(v=[]) %}
+
                 {% for i in items %}
+
                   {% if i.status == 'needs_action' %}
-                    {% set r.v = r.v + [[['✅ ' ~ i.summary, '/done_' ~ i.uid]]] %}
+                    {% set r.v = r.v + [[
+                      ['✅ ' ~ i.summary, '/done_' ~ i.uid]
+                    ]] %}
                   {% else %}
-                    {% set r.v = r.v + [[['☑️ ' ~ i.summary, '/reopen_' ~ i.uid]]] %}
+                    {% set r.v = r.v + [[
+                      ['☑️ ' ~ i.summary, '/reopen_' ~ i.uid]
+                    ]] %}
                   {% endif %}
+
                 {% endfor %}
+
                 {% if has_completed %}
+
                   {% if mode == 'active' %}
-                    {% set r.v = r.v + [[['📂 Все','/show_all']]] %}
+                    {% set r.v = r.v + [[
+                      ['📂 Все', '/show_all']
+                    ]] %}
                   {% else %}
-                    {% set r.v = r.v + [[['🛒 Активные','/show_active']]] %}
+                    {% set r.v = r.v + [[
+                      ['🛒 Активные', '/show_active']
+                    ]] %}
                   {% endif %}
-                  {% set r.v = r.v + [[['🗑 Очистить','/clear_completed']]] %}
+
+                  {% set r.v = r.v + [[
+                    ['🗑 Очистить', '/clear_completed']
+                  ]] %}
+
                 {% endif %}
+
                 {% if sync_script_1 and sync_script_1 != '' and sync_script_2 and sync_script_2 != '' %}
-                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_1_name, '/sync_1'], ['🔹 ' ~ sync_script_2_name, '/sync_2']]] %}
+                  {% set r.v = r.v + [[
+                    ['🔹 ' ~ sync_script_1_name, '/sync_1'],
+                    ['🔹 ' ~ sync_script_2_name, '/sync_2']
+                  ]] %}
                 {% elif sync_script_1 and sync_script_1 != '' %}
-                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_1_name, '/sync_1']]] %}
+                  {% set r.v = r.v + [[
+                    ['🔹 ' ~ sync_script_1_name, '/sync_1']
+                  ]] %}
                 {% elif sync_script_2 and sync_script_2 != '' %}
-                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_2_name, '/sync_2']]] %}
+                  {% set r.v = r.v + [[
+                    ['🔹 ' ~ sync_script_2_name, '/sync_2']
+                  ]] %}
                 {% endif %}
+
                 {% if sync_script_3 and sync_script_3 != '' %}
-                  {% set r.v = r.v + [[['🔹 ' ~ sync_script_3_name, '/sync_3']]] %}
+                  {% set r.v = r.v + [[
+                    ['🔹 ' ~ sync_script_3_name, '/sync_3']
+                  ]] %}
                 {% endif %}
+
                 {{ r.v }}
 
           - action: telegram_bot.edit_message
