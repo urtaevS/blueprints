@@ -10,6 +10,7 @@ blueprint:
     - поддержка добавления через "," и "."
     - синхронизация через скрипты (опционально)
     - режим редактирования списка через ✨
+    - пункты с ✨ отображаются сверху
     - HA 2025.12+
   domain: automation
 
@@ -86,7 +87,6 @@ variables:
   sync_script_3_name: !input sync_script_3_name
 
 trigger:
-
   - platform: event
     event_type: telegram_command
 
@@ -97,7 +97,6 @@ trigger:
     event_type: telegram_callback
 
 condition:
-
   - condition: template
     value_template: >
       {{
@@ -107,7 +106,6 @@ condition:
       }}
 
 action:
-
   - choose:
 
       ############################################################
@@ -169,6 +167,8 @@ action:
 
       ############################################################
       # /list — показать активные
+      #
+      # Пункты с ✨ идут первыми.
       ############################################################
       - conditions:
           - condition: template
@@ -186,11 +186,20 @@ action:
 
           - variables:
               items: >
-                {{
+                {% set all_items =
                   todo_resp[todo_entity]['items']
                   | selectattr('status', 'eq', 'needs_action')
                   | list
-                }}
+                %}
+                {% set r = namespace(marked=[], normal=[]) %}
+                {% for i in all_items %}
+                  {% if i.summary.endswith('✨') %}
+                    {% set r.marked = r.marked + [i] %}
+                  {% else %}
+                    {% set r.normal = r.normal + [i] %}
+                  {% endif %}
+                {% endfor %}
+                {{ r.marked + r.normal }}
 
               has_completed: >
                 {{
@@ -254,6 +263,8 @@ action:
 
       ############################################################
       # REPLY: 📋 Показать список
+      #
+      # Пункты с ✨ идут первыми.
       ############################################################
       - conditions:
           - condition: template
@@ -271,11 +282,20 @@ action:
 
           - variables:
               items: >
-                {{
+                {% set all_items =
                   todo_resp[todo_entity]['items']
                   | selectattr('status', 'eq', 'needs_action')
                   | list
-                }}
+                %}
+                {% set r = namespace(marked=[], normal=[]) %}
+                {% for i in all_items %}
+                  {% if i.summary.endswith('✨') %}
+                    {% set r.marked = r.marked + [i] %}
+                  {% else %}
+                    {% set r.normal = r.normal + [i] %}
+                  {% endif %}
+                {% endfor %}
+                {{ r.marked + r.normal }}
 
               has_completed: >
                 {{
@@ -340,7 +360,7 @@ action:
       ############################################################
       # REPLY: ✏️ Редактировать
       #
-      # Открывает отдельный режим:
+      # Пункты с ✨ идут первыми.
       #
       # [❕ молоко]
       # [❕ хлеб]
@@ -364,11 +384,20 @@ action:
 
           - variables:
               edit_items: >
-                {{
+                {% set all_items =
                   edit_resp[todo_entity]['items']
                   | selectattr('status', 'eq', 'needs_action')
                   | list
-                }}
+                %}
+                {% set r = namespace(marked=[], normal=[]) %}
+                {% for i in all_items %}
+                  {% if i.summary.endswith('✨') %}
+                    {% set r.marked = r.marked + [i] %}
+                  {% else %}
+                    {% set r.normal = r.normal + [i] %}
+                  {% endif %}
+                {% endfor %}
+                {{ r.marked + r.normal }}
 
               edit_keyboard: >
                 {% set r = namespace(v=[]) %}
@@ -415,11 +444,20 @@ action:
 
           - variables:
               items: >
-                {{
+                {% set all_items =
                   todo_resp[todo_entity]['items']
                   | selectattr('status', 'eq', 'needs_action')
                   | list
-                }}
+                %}
+                {% set r = namespace(marked=[], normal=[]) %}
+                {% for i in all_items %}
+                  {% if i.summary.endswith('✨') %}
+                    {% set r.marked = r.marked + [i] %}
+                  {% else %}
+                    {% set r.normal = r.normal + [i] %}
+                  {% endif %}
+                {% endfor %}
+                {{ r.marked + r.normal }}
 
               text: >
                 {% if items | length == 0 %}
@@ -581,6 +619,7 @@ action:
 
       ############################################################
       # Добавление пункта текстом
+      #
       # МУЛЬТИ + ЗАЩИТА ОТ ДУБЛЕЙ
       ############################################################
       - conditions:
@@ -708,11 +747,20 @@ action:
 
           - variables:
               items: >
-                {{
+                {% set all_items =
                   todo_resp[todo_entity]['items']
                   | selectattr('status', 'eq', 'needs_action')
                   | list
-                }}
+                %}
+                {% set r = namespace(marked=[], normal=[]) %}
+                {% for i in all_items %}
+                  {% if i.summary.endswith('✨') %}
+                    {% set r.marked = r.marked + [i] %}
+                  {% else %}
+                    {% set r.normal = r.normal + [i] %}
+                  {% endif %}
+                {% endfor %}
+                {{ r.marked + r.normal }}
 
               has_completed: >
                 {{
@@ -778,10 +826,10 @@ action:
       # CALLBACK: Режим редактирования — переключение ✨
       #
       # Если ✨ нет:
-      #   молоко -> молоко✨
+      # молоко -> молоко✨
       #
       # Если ✨ уже есть:
-      #   молоко✨ -> молоко
+      # молоко✨ -> молоко
       #
       # Используется тот же UID todo item.
       # Никаких helper не требуется.
@@ -846,11 +894,20 @@ action:
 
                   - variables:
                       edit_items_after: >
-                        {{
+                        {% set all_items =
                           edit_resp_after[todo_entity]['items']
                           | selectattr('status', 'eq', 'needs_action')
                           | list
-                        }}
+                        %}
+                        {% set r = namespace(marked=[], normal=[]) %}
+                        {% for i in all_items %}
+                          {% if i.summary.endswith('✨') %}
+                            {% set r.marked = r.marked + [i] %}
+                          {% else %}
+                            {% set r.normal = r.normal + [i] %}
+                          {% endif %}
+                        {% endfor %}
+                        {{ r.marked + r.normal }}
 
                       edit_keyboard_after: >
                         {% set r = namespace(v=[]) %}
@@ -884,10 +941,8 @@ action:
               ####################################################
               # Пункт уже имеет ✨ — убираем последний символ
               #
-              # Важно:
-              # здесь НЕ используется regex_replace.
-              # summary[:-1] удаляет последний символ строки,
-              # которым в этой ветке гарантированно является ✨.
+              # summary[:-1] безопасно удаляет именно последний
+              # символ, так как в этой ветке он гарантированно ✨.
               ####################################################
               - conditions:
                   - condition: template
@@ -912,11 +967,20 @@ action:
 
                   - variables:
                       edit_items_after: >
-                        {{
+                        {% set all_items =
                           edit_resp_after[todo_entity]['items']
                           | selectattr('status', 'eq', 'needs_action')
                           | list
-                        }}
+                        %}
+                        {% set r = namespace(marked=[], normal=[]) %}
+                        {% for i in all_items %}
+                          {% if i.summary.endswith('✨') %}
+                            {% set r.marked = r.marked + [i] %}
+                          {% else %}
+                            {% set r.normal = r.normal + [i] %}
+                          {% endif %}
+                        {% endfor %}
+                        {{ r.marked + r.normal }}
 
                       edit_keyboard_after: >
                         {% set r = namespace(v=[]) %}
@@ -965,6 +1029,7 @@ action:
       # CALLBACK: ✍️ Закончить редактирование
       #
       # Возвращаем обычный список.
+      # Пункты с ✨ идут первыми.
       ############################################################
       - conditions:
           - condition: template
@@ -985,11 +1050,20 @@ action:
 
           - variables:
               finish_items: >
-                {{
+                {% set all_items =
                   finish_resp[todo_entity]['items']
                   | selectattr('status', 'eq', 'needs_action')
                   | list
-                }}
+                %}
+                {% set r = namespace(marked=[], normal=[]) %}
+                {% for i in all_items %}
+                  {% if i.summary.endswith('✨') %}
+                    {% set r.marked = r.marked + [i] %}
+                  {% else %}
+                    {% set r.normal = r.normal + [i] %}
+                  {% endif %}
+                {% endfor %}
+                {{ r.marked + r.normal }}
 
               finish_has_completed: >
                 {{
@@ -1066,6 +1140,8 @@ action:
       # /show_all
       # /show_active
       # /clear_completed
+      #
+      # Пункты с ✨ идут первыми.
       ############################################################
       - conditions:
           - condition: template
@@ -1121,10 +1197,7 @@ action:
 
           - variables:
               items_all: >
-                {{
-                  todo_resp[todo_entity]['items']
-                  | default([])
-                }}
+                {{ todo_resp[todo_entity]['items'] | default([]) }}
 
               has_completed: >
                 {{
@@ -1144,15 +1217,25 @@ action:
                 {% endif %}
 
               items: >
-                {% if mode == 'all' %}
-                  {{ items_all }}
-                {% else %}
-                  {{
+                {% set source_items =
+                  (
+                    items_all
+                    if mode == 'all'
+                    else
                     items_all
                     | selectattr('status', 'eq', 'needs_action')
                     | list
-                  }}
-                {% endif %}
+                  )
+                %}
+                {% set r = namespace(marked=[], normal=[]) %}
+                {% for i in source_items %}
+                  {% if i.summary.endswith('✨') %}
+                    {% set r.marked = r.marked + [i] %}
+                  {% else %}
+                    {% set r.normal = r.normal + [i] %}
+                  {% endif %}
+                {% endfor %}
+                {{ r.marked + r.normal }}
 
               text: >
                 {% if items | length == 0 %}
